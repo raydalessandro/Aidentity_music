@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { copyRenderedText, copyText } from "./clipboard";
+import { messaggioCopia } from "./EpkBio";
 import { EpkSurface } from "./EpkSurface";
 import {
   emptyContent,
@@ -199,8 +200,27 @@ describe("numeri manuali", () => {
 describe("bio copiabile", () => {
   it("rende una regione aria-live polite vuota, pronta ad annunciare l'esito", () => {
     expect(markup).toContain('role="status" aria-live="polite" aria-atomic="true"');
-    expect(markup).toContain("Copia la bio breve");
-    expect(markup).toContain("Copia la bio lunga");
+    expect(markup).toContain('data-epk-bio="short"');
+    expect(markup).toContain('data-epk-bio="long"');
+  });
+
+  it("senza JavaScript non rende un bottone inerte, ma la bio resta leggibile", () => {
+    // Il markup statico è ciò che si vede prima dell'idratazione: un comando
+    // che non risponde e non annuncia nulla è peggio di nessun comando.
+    expect(markup).not.toContain("<button");
+    expect(markup).not.toContain("Copia la bio breve");
+    expect(markup).toContain("NVLL CLICK è il progetto elettronico di Vera Sanna.");
+  });
+
+  it("annuncia entrambi gli esiti: il fallimento dice cosa fare a mano", () => {
+    expect(messaggioCopia("Bio breve", true)).toBe("Bio breve copiata negli appunti.");
+    expect(messaggioCopia("Bio breve", false)).toBe(
+      "Copia non riuscita: seleziona il testo della bio breve e copialo a mano.",
+    );
+    expect(messaggioCopia("Bio lunga", false)).toContain("bio lunga");
+    // Il silenzio non è un esito: nessuno dei due rami può essere vuoto.
+    expect(messaggioCopia("Bio lunga", true)).not.toBe("");
+    expect(messaggioCopia("Bio lunga", false)).not.toBe("");
   });
 
   it("copia il testo reso, non una seconda copia della stringa", async () => {
@@ -209,6 +229,16 @@ describe("bio copiabile", () => {
     // Il tipo accetta un elemento, non una stringa: passare la prop non compila.
     await expect(copyRenderedText({ textContent: "testo così com'è reso" })).resolves.toBe(true);
     expect(writeText).toHaveBeenCalledWith("testo così com'è reso");
+  });
+
+  it("non lancia nemmeno se leggere l'elemento fallisce: un'eccezione qui sarebbe silenzio là", async () => {
+    vi.stubGlobal("navigator", { clipboard: { writeText: async () => undefined } });
+    const elementoRotto: { textContent: string | null } = {
+      get textContent(): string | null {
+        throw new Error("elemento non più nel documento");
+      },
+    };
+    await expect(copyRenderedText(elementoRotto)).resolves.toBe(false);
   });
 
   it("un elemento assente o vuoto non finge una copia riuscita", async () => {
@@ -231,7 +261,9 @@ describe("copia negli appunti", () => {
     value: string;
     style: Record<string, string>;
     setAttribute: (name: string, value: string) => void;
+    focus: () => void;
     select: () => void;
+    setSelectionRange: (inizio: number, fine: number) => void;
     remove: () => void;
   };
 
@@ -240,7 +272,9 @@ describe("copia negli appunti", () => {
       value: "",
       style: {},
       setAttribute: () => undefined,
+      focus: () => undefined,
       select: () => undefined,
+      setSelectionRange: () => undefined,
       remove: () => {
         rimosso.valore = true;
       },
@@ -285,6 +319,32 @@ describe("copia negli appunti", () => {
 
     await expect(copyText("bio breve")).resolves.toBe(true);
     expect(page.execCommand).toHaveBeenCalledWith("copy");
+  });
+
+  it("non resta appesa se writeText non risolve mai: scade e ricade sulla selezione", async () => {
+    // Il caso che ha lasciato muta la regione aria-live in Chromium headless:
+    // la promessa non rigetta, semplicemente non torna.
+    const writeText = vi.fn(() => new Promise<void>(() => undefined));
+    const { page, field } = fakeDocument(() => true);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    vi.stubGlobal("document", page);
+
+    await expect(copyText("bio breve", 5)).resolves.toBe(true);
+    expect(page.execCommand).toHaveBeenCalledWith("copy");
+    expect(field.value).toBe("bio breve");
+  });
+
+  it("non lancia mai: anche una ricaduta che esplode torna false", async () => {
+    vi.stubGlobal("navigator", {});
+    vi.stubGlobal("document", {
+      execCommand: () => true,
+      createElement: () => {
+        throw new Error("DOM indisponibile");
+      },
+      body: { appendChild: () => undefined },
+    });
+
+    await expect(copyText("bio breve")).resolves.toBe(false);
   });
 
   it("dichiara il fallimento invece di fingere: nessun appunto, nessun true", async () => {

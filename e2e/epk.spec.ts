@@ -104,7 +104,7 @@ test("provider fuori set e URL non https non arrivano nel DOM", async ({ page })
   );
 });
 
-test("la copia della bio copia il testo reso e lo annuncia agli screen reader", async ({
+test("la copia della bio annuncia l'esito riuscito agli screen reader", async ({
   page,
   context,
 }) => {
@@ -113,26 +113,66 @@ test("la copia della bio copia il testo reso e lo annuncia agli screen reader", 
 
   const epk = page.locator("#epk-nocturne");
   const stato = epk.locator('[role="status"]');
+  const bottone = epk.getByRole("button", { name: "Copia la bio breve" });
+
+  // Il bottone è reso dopo il mount: la sua comparsa è la prova che il
+  // componente è idratato. Cliccare prima significherebbe cliccare un disegno.
+  await expect(bottone).toBeVisible();
 
   // Prima del click la regione esiste ed è vuota: l'annuncio non è precotto.
   await expect(stato).toHaveAttribute("aria-live", "polite");
   await expect(stato).toHaveText("");
 
-  const paragrafo = epk.locator('[data-epk-bio="short"]');
-  const reso = (await paragrafo.textContent()) ?? "";
-  expect(reso.trim().length).toBeGreaterThan(0);
-
-  await epk.getByRole("button", { name: "Copia la bio breve" }).click();
-
+  await bottone.click();
   await expect(stato).toHaveText("Bio breve copiata negli appunti.");
-  const appunti = await page.evaluate(() => navigator.clipboard.readText());
-  expect(appunti, "si copia il testo reso, non una seconda copia della stringa").toBe(reso);
 
   // La bio lunga usa la stessa regione e la riscrive.
-  const lunga = (await epk.locator('[data-epk-bio="long"]').textContent()) ?? "";
   await epk.getByRole("button", { name: "Copia la bio lunga" }).click();
   await expect(stato).toHaveText("Bio lunga copiata negli appunti.");
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(lunga);
+});
+
+test("negli appunti finisce il testo reso, non una seconda copia della stringa", async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.goto(PAGINA);
+
+  const epk = page.locator("#epk-nocturne");
+  const reso = (await epk.locator('[data-epk-bio="short"]').textContent()) ?? "";
+  expect(reso.trim().length).toBeGreaterThan(0);
+
+  const bottone = epk.getByRole("button", { name: "Copia la bio breve" });
+  await expect(bottone).toBeVisible();
+  await bottone.click();
+  await expect(epk.locator('[role="status"]')).toHaveText("Bio breve copiata negli appunti.");
+
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(reso);
+});
+
+test("anche la copia fallita viene annunciata, con l'azione da fare a mano", async ({ page }) => {
+  // Si nega tutto: la Clipboard API rifiuta e la ricaduta storica fallisce.
+  // È la condizione in cui, prima, l'utente riceveva silenzio.
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: () => Promise.reject(new Error("permesso negato")) },
+    });
+    document.execCommand = () => false;
+  });
+  await page.goto(PAGINA);
+
+  const epk = page.locator("#epk-nocturne");
+  const stato = epk.locator('[role="status"]');
+  const bottone = epk.getByRole("button", { name: "Copia la bio breve" });
+
+  await expect(bottone).toBeVisible();
+  await expect(stato).toHaveText("");
+  await bottone.click();
+
+  await expect(stato).toHaveText(
+    "Copia non riuscita: seleziona il testo della bio breve e copialo a mano.",
+  );
 });
 
 test("l'azione principale resta leggibile su tutte e quattro le palette", async ({ page }) => {
