@@ -1,5 +1,5 @@
 begin;
-select plan(35);
+select plan(37);
 
 -- 1. Oggetti, vincoli e piani canonici.
 select has_table('public', 'sites', 'sites esiste');
@@ -111,6 +111,8 @@ select throws_ok(
   $$update public.moderation_events set reason='manomesso' where site_id='22222222-2222-2222-2222-222222222222'$$,
   '42501', null, 'audit append-only: UPDATE rifiutato con SQLSTATE 42501'
 );
+select lives_ok($$select public.moderate_site('22222222-2222-2222-2222-222222222222','suspend','test pgTAP')$$, 'platform admin sospende tramite azione protetta');
+select is((select count(*)::integer from public.moderation_events where site_id='22222222-2222-2222-2222-222222222222'), 1, 'moderazione lecita produce un singolo audit event');
 reset role;
 select hasnt_column('public', 'public_sites', 'owner_id', 'proiezione pubblica non espone owner');
 select ok(not exists(select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' and c.relname in ('profiles','sites','site_subscriptions','site_usage','site_config','site_assets','site_tracks','site_posts','site_links','site_press','site_dates','site_metrics','site_contacts','site_upload_reservations') and not c.relrowsecurity), 'RLS attiva su tutte le relazioni pubbliche esposte');
