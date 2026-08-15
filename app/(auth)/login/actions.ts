@@ -5,6 +5,8 @@ import { z } from "zod";
 import { readSiteUrl } from "@/lib/supabase/public-env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+import { magicLinkRedirect } from "../_lib/magic-link-redirect";
+
 export type MagicLinkState = {
   status: "idle" | "sent" | "error";
   message: string;
@@ -32,7 +34,7 @@ export async function requestMagicLink(
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.signInWithOtp({
     email: email.data,
-    options: { emailRedirectTo: `${readSiteUrl()}/auth/callback` },
+    options: { emailRedirectTo: magicLinkRedirect(formData.get("next")) },
   });
 
   if (error) {
