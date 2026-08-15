@@ -1,0 +1,73 @@
+-- Chiusura della superficie segnalata dagli advisor Supabase come
+-- `anon_security_definer_function_executable` su `public.moderate_site` e
+-- `public.request_site_review`.
+--
+-- IL DIFETTO
+-- Postgres, quando crea una funzione, le mette addosso un EXECUTE a PUBLIC. Non e'
+-- una scelta di chi scrive il DDL: e' il default del catalogo, e sopravvive a
+-- qualunque grant successivo perche' un grant non revoca nulla. Sul progetto reale
+-- si aggiunge il bootstrap legacy dei progetti Supabase cloud, che tiene dei
+-- default privileges per `postgres` nello schema `public` a favore dei tre ruoli
+-- della Data API. Il risultato letto su `pg_proc.proacl` e' questo:
+--
+--   moderate_site        {=X/postgres, postgres=X/postgres, anon=X/postgres,
+--                         authenticated=X/postgres, service_role=X/postgres}
+--   request_site_review  idem
+--   billing_context      {postgres=X/postgres, service_role=X/postgres}
+--   apply_billing_event  {postgres=X/postgres, service_role=X/postgres}
+--
+-- `=X/postgres` e' l'EXECUTE a PUBLIC. Le due funzioni della migrazione B hanno
+-- l'ACL pulita perche' quella migrazione revoca da `public, anon, authenticated`
+-- *prima* di concedere a `service_role` (righe 210-216). PR-0 fa la stessa cosa
+-- per lo schema `private` (riga 275) ma non ha un equivalente per `public`: alla
+-- riga 274 concede EXECUTE ad `authenticated` sulle due funzioni e si ferma li',
+-- quindi il default resta. Le due funzioni sono percio' esposte su
+-- `/rest/v1/rpc/` senza alcun token.
+--
+-- NON E' UN'ESCALATION, E' DIFESA IN PROFONDITA' CHE MANCA
+-- Entrambe controllano all'ingresso `private.is_site_owner()` e
+-- `private.is_platform_admin()`, che per `anon` -- dove `auth.uid()` e' NULL --
+-- sono false: la chiamata anonima finisce oggi con `not site owner` / `not platform
+-- admin`, SQLSTATE 42501 sollevato dal *corpo* della funzione. Nessun dato esce,
+-- nessuno stato cambia. Ma la sicurezza di `moderate_site`, che sospende e approva
+-- i siti, poggia interamente sulla correttezza di quelle due righe di controllo:
+-- una `create or replace` distratta, o un ramo aggiunto sopra il controllo, e la
+-- funzione diventa un endpoint anonimo. Il privilegio, invece, non dipende dal
+-- corpo. Dopo questa migrazione `anon` non entra piu' nella funzione: viene
+-- fermato prima, con `permission denied for function moderate_site`. La differenza
+-- fra i due 42501 e' esattamente cio' che il test misura.
+--
+-- LA FORMA DELLA REVOCA
+-- Revocare da PUBLIC non revoca da un ruolo che ha un grant proprio, e revocare da
+-- un ruolo non tocca PUBLIC: sono voci distinte dell'ACL. L'ACL reale le ha
+-- entrambe (`=X/` e `anon=X/`), quindi servono entrambe le revoche. Sullo stack
+-- locale della CLI, dove `auto_expose_new_tables` non e' impostato, i default
+-- privileges legacy non ci sono e la voce `anon=X/` non compare: la revoca su
+-- `anon` e' li' un no-op innocuo. Una sola migrazione deve valere per entrambi.
+--
+-- COSA NON SI TOCCA
+-- `authenticated` conserva EXECUTE. E' il grant che PR-0 concede deliberatamente
+-- alla riga 274 ed e' il canale con cui owner e platform admin usano davvero le
+-- due RPC; toglierlo romperebbe il prodotto, non lo metterebbe in sicurezza. La
+-- distinzione fra owner, admin e chiunque altro resta dove L0.7 la mette, cioe'
+-- dentro il corpo della funzione -- solo che ora non e' piu' l'unica difesa.
+-- `service_role` non viene toccato: e' il ruolo di backend e webhook, gia'
+-- destinatario esplicito dei grant della migrazione B, e la sua chiave non
+-- raggiunge mai il browser.
+--
+-- LE ALTRE FUNZIONI DI `public`
+-- Sono quattro in tutto, in tutte le migrazioni: le due qui sotto e le due della
+-- migrazione B, che sono gia' pulite. Le migrazioni delle proiezioni pubbliche e
+-- dei grant di `private` non creano funzioni in `public` -- `private.contact_is_public`
+-- e' nello schema `private` e ad `anon` l'EXECUTE e' concesso apposta, perche' la
+-- vista `public_contacts` lo valuta nella propria WHERE. Il test che accompagna
+-- questa migrazione non si limita alle due funzioni note: asserisce che *nessuna*
+-- funzione SECURITY DEFINER dello schema `public` sia eseguibile da PUBLIC o da
+-- `anon`. Se una prossima migrazione ne creera' una lasciandole il default, sara'
+-- quel test a diventare rosso, non un advisor tre settimane dopo.
+
+revoke execute on function public.request_site_review(uuid)
+  from public, anon;
+
+revoke execute on function public.moderate_site(uuid, public.moderation_action, text)
+  from public, anon;
