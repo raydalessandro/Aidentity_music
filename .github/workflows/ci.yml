@@ -93,6 +93,25 @@ jobs:
         if: steps.guardia.outputs.presenti == 'true'
         run: npx playwright install --with-deps chromium
 
+      # Senza database, un test che legge da Postgres non può girare qui: e uno
+      # che "passa" senza database non sta verificando niente. `supabase start`
+      # applica già migrazioni e seed su un runner vergine, quindi NON si ripete
+      # il `db reset` del job Database — là la ricostruzione da zero è il test,
+      # qui servirebbe solo come mezzo. Niente lint, niente pgTAP, niente diff.
+      - name: Avvia lo stack locale Supabase
+        if: steps.guardia.outputs.presenti == 'true'
+        run: npx supabase start -x realtime,imgproxy,studio,edge-runtime,logflare,vector
+
+      # Chiavi dello stack locale ed effimero, generate dalla CLI a ogni run e
+      # valide solo dentro questo runner: non sono segreti, non vanno in un
+      # secret di repository e non passano dal diff.
+      - name: Esporta le credenziali locali per Next
+        if: steps.guardia.outputs.presenti == 'true'
+        run: |
+          STATUS=$(npx supabase status -o json)
+          echo "NEXT_PUBLIC_SUPABASE_URL=$(echo "$STATUS" | jq -r '.API_URL')" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(echo "$STATUS" | jq -r '.ANON_KEY')" >> "$GITHUB_ENV"
+
       - name: Playwright + axe
         if: steps.guardia.outputs.presenti == 'true'
         run: npm run test:e2e
