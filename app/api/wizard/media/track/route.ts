@@ -80,7 +80,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         provider: parsed.data.provider,
         url: parsed.data.url,
       });
-      if (!track.success) return NextResponse.json({ error: "traccia embed non valida" }, { status: 400 });
+      if (!track.success || track.data.source !== "embed") {
+        return NextResponse.json({ error: "traccia embed non valida" }, { status: 400 });
+      }
 
       const privileged = createSupabaseServiceRoleClient();
       // Upload ed embed condividono la stessa lista e lo stesso ordinamento.

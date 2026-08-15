@@ -54,6 +54,6 @@ describe("stack C -> media", () => {
   });
 
   it("la migrazione C viene dopo la migrazione che crea i bucket", () => {
-    expect("20260815203000").toBeGreaterThan("20260815190000");
+    expect(Number("20260815203000")).toBeGreaterThan(Number("20260815190000"));
   });
 });
