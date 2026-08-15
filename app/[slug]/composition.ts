@@ -21,24 +21,53 @@ import {
   type SiteReader,
 } from "./site-reader";
 
-let configured: SiteReader | null = null;
+/**
+ * Lo stato del bordo vive nel registro globale dei simboli, non in una variabile di modulo.
+ *
+ * Non è una preferenza stilistica: è una misura. Su Next 16.3.1 con Turbopack
+ * (`next build && next start`), `instrumentation.ts` e le route dell'app router caricano
+ * **due istanze distinte di questo stesso modulo dentro lo stesso processo** — misurato con
+ * un identificativo casuale per istanza e `process.pid`: pid `18380` per entrambe, istanze
+ * `li4uwy` (instrumentation) e `q1ssel` (tutte le route, `/[slug]`, `/[slug]/epk`,
+ * `/[slug]/listen`). Tutte le route condividono un'istanza; l'instrumentation ha la sua.
+ *
+ * Con una variabile di modulo, `configureSiteReader` scriveva nell'istanza
+ * dell'instrumentation e `siteReader()` leggeva quella delle route: l'adattatore risultava
+ * registrato (`registered: true`, query reale verso PostgREST) e ogni slug rispondeva
+ * comunque **404**. Il registro globale è per realm, quindi le due istanze vedono lo stesso
+ * riferimento e il bordo torna a essere uno solo.
+ *
+ * L'API pubblica non cambia; `composition.test.ts` continua a valere parola per parola.
+ */
+type ReaderSlot = { reader: SiteReader | null };
+
+const SLOT_KEY = Symbol.for("aidentity.site-reader");
+const globalSlots = globalThis as unknown as Record<symbol, ReaderSlot | undefined>;
+
+function slot(): ReaderSlot {
+  const existing = globalSlots[SLOT_KEY];
+  if (existing !== undefined) return existing;
+  const created: ReaderSlot = { reader: null };
+  globalSlots[SLOT_KEY] = created;
+  return created;
+}
 
 /** Iniezione esplicita, da chiamare una sola volta all'avvio, fuori da `app/[slug]/**`. */
 export function configureSiteReader(reader: SiteReader): void {
-  configured = reader;
+  slot().reader = reader;
 }
 
 /** Ripristina il lettore neutro. Serve ai test, non al prodotto. */
 export function resetSiteReader(): void {
-  configured = null;
+  slot().reader = null;
 }
 
 export function isSiteReaderConfigured(): boolean {
-  return configured !== null;
+  return slot().reader !== null;
 }
 
 export function siteReader(): SiteReader {
-  return configured ?? unconfiguredSiteReader;
+  return slot().reader ?? unconfiguredSiteReader;
 }
 
 /** `cache` deduplica la risoluzione fra `generateMetadata` e il render della stessa richiesta. */
