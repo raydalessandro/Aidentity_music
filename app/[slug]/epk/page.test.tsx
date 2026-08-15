@@ -79,6 +79,17 @@ const contacts: readonly PublicContactRow[] = [
     consent_confirmed_at: "2026-07-02T09:00:00+02:00",
     sort_order: 2,
   }),
+  // RIFIUTATO da `renderableContacts`, non dalla route: email che non è un'email. Sta qui
+  // perché è la prova che i contatti attraversano davvero `EpkContacts` — se la route tornasse
+  // a stamparseli da sola, questa riga comparirebbe e nessun altro test se ne accorgerebbe.
+  {
+    id: "cccc0004-0000-0000-0000-000000000000",
+    site_id: SITE_ID,
+    role: "booking",
+    name: "Email Rotta",
+    email: "email-senza-chiocciola",
+    sort_order: 3,
+  },
 ];
 
 const links: readonly PublicLinkRow[] = [
@@ -200,6 +211,10 @@ const mustNotAppear: readonly { value: string; because: string }[] = [
     value: "consenso-trapelato@nvllclick.example",
     because: "email del contatto la cui riga porta il campo del consenso valorizzato",
   },
+  {
+    value: "email-senza-chiocciola",
+    because: "contatto con email malformata, scartato da renderableContacts dentro EpkContacts",
+  },
   { value: "bandcamp", because: "provider fuori dall'insieme chiuso di L0.7 §5" },
   { value: "http://www.youtube.com/@nvllclick", because: "URL del link non https" },
   { value: "Testata Senza Quote", because: "quote stampa vuota" },
@@ -231,15 +246,28 @@ afterEach(() => {
 });
 
 describe("la route EPK rende i componenti di components/epk", () => {
+  /**
+   * L'ordine si misura sugli `id` delle intestazioni, non sul loro testo.
+   *
+   * Non è pignoleria: il testo collide. «Stampa» è anche l'etichetta del ruolo `press` di un
+   * contatto, quindi cercare `>Stampa<` trova per prima l'etichetta di un contatto e riporta
+   * un ordine che nessuno ha scritto. Misurato: con un contatto stampa reso, il test in quella
+   * forma falliva con la sezione Stampa a 2491, cioè prima della Bio a 3121. Gli `id`
+   * (`epk-contatti`, `epk-bio`, …) li genera un componente solo ciascuno.
+   */
   it("monta le sei sezioni nell'ordine deciso dal filone E", async () => {
     const markup = await renderEpk("nvll-click", records);
 
-    const order = ["Contatti", "Bio", "Ascolta e segui", "Stampa", "Date live", "Numeri"].map(
-      (heading) => markup.indexOf(`>${heading}<`),
-    );
+    const sections = ["contatti", "bio", "link", "stampa", "date", "numeri"] as const;
+    const order = sections.map((section) => markup.indexOf(`id="epk-${section}"`));
 
-    expect(order, `intestazioni trovate: ${JSON.stringify(order)}`).not.toContain(-1);
+    expect(order, `posizioni: ${JSON.stringify(order)}`).not.toContain(-1);
     expect(order).toEqual([...order].sort((left, right) => left - right));
+
+    // E le intestazioni sono quelle giuste, con il testo che l'artista si aspetta di leggere.
+    for (const heading of ["Contatti", "Bio", "Ascolta e segui", "Stampa", "Date live", "Numeri"]) {
+      expect(markup, `intestazione assente: ${heading}`).toContain(`>${heading}</h2>`);
+    }
   });
 
   it("rende il contenuto ammesso di tutte e cinque le collezioni", async () => {
@@ -262,6 +290,25 @@ describe("la route EPK rende i componenti di components/epk", () => {
     // numeri
     expect(markup).toContain("Ascolti mensili");
     expect(markup).toContain("184.000");
+  });
+
+  /**
+   * Claim e `Base` non appartengono a nessun componente del filone E e li porta `EpkIdentity`.
+   * Erano spariti quando la route ha smesso di montarlo: Ray l'ha chiamata regressione, e
+   * questo test è ciò che impedisce che ricapiti in silenzio.
+   */
+  it("rende anche claim e Base, che nessun componente di E copre", async () => {
+    const markup = await renderEpk("nvll-click", records);
+    expect(markup).toContain("Electro-pop italiano");
+    expect(markup).toContain(">Base<");
+    expect(markup).toContain("Milano");
+  });
+
+  /** L'altra metà: la bio ha un padrone solo, quello che la rende copiabile. */
+  it("non stampa la bio due volte", async () => {
+    const markup = await renderEpk("nvll-click", records);
+    expect(markup.match(/Fixture locale per reset e test CI\./g) ?? []).toHaveLength(1);
+    expect(markup.match(/>Bio breve</g) ?? []).toHaveLength(1);
   });
 
   it.each(mustNotAppear)("non rende $value ($because)", async ({ value }) => {
@@ -298,17 +345,19 @@ describe("la route è parametrica rispetto a ciò che loadEpk restituisce", () =
     expect(first).toContain(">Spotify<");
     expect(second).not.toContain(">Spotify<");
     expect(second).toContain('href="https://www.tiktok.com/@nvllclick"');
-    expect(first).toContain(">Numeri<");
-    expect(second).not.toContain(">Numeri<");
+    expect(first).toContain('id="epk-numeri"');
+    expect(second).not.toContain('id="epk-numeri"');
   });
 
   it("senza righe non nasce nessuna intestazione orfana", async () => {
     const markup = await renderEpk("nvll-click", EMPTY_EPK);
 
-    for (const heading of ["Contatti", "Ascolta e segui", "Stampa", "Date live", "Numeri"]) {
-      expect(markup, `sezione vuota resa comunque: ${heading}`).not.toContain(`>${heading}<`);
+    for (const section of ["contatti", "link", "stampa", "date", "numeri"]) {
+      expect(markup, `sezione vuota resa comunque: ${section}`).not.toContain(`id="epk-${section}"`);
     }
-    // La bio viene dalla config, non da `loadEpk`: resta, ed è la prova che la pagina è viva.
-    expect(markup).toContain(">Bio<");
+    // Bio, claim e Base vengono dalla config, non da `loadEpk`: restano, e sono la prova che
+    // la pagina è viva e che il vuoto qui sopra è un vuoto misurato, non una pagina spenta.
+    expect(markup).toContain('id="epk-bio"');
+    expect(markup).toContain(">Base<");
   });
 });

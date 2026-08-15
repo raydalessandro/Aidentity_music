@@ -99,16 +99,24 @@ export function TrackCatalogue({ view }: { readonly view: ListenView }) {
   );
 }
 
-/** Bio e luogo arrivano dalla config: sono gli unici dati EPK oggi pubblicamente proiettati. */
+/**
+ * Claim e luogo, dalla config.
+ *
+ * Non rende più le due bio, e la sottrazione è il motivo per cui il componente esiste ancora.
+ * Da quando la route EPK monta `EpkBio` di `components/epk`, le bio hanno un solo padrone —
+ * quello che le rende copiabili, come chiede L0.7 §2. Tenerle anche qui avrebbe significato
+ * stampare due volte lo stesso testo e due intestazioni «Bio breve» nella stessa pagina: un
+ * duplicato che a chi naviga per intestazioni si presenta come due sezioni diverse con lo
+ * stesso nome.
+ *
+ * Restano claim e `Base`, che nessun componente del filone E copre e che senza questo blocco
+ * sparirebbero dall'EPK.
+ */
 export function EpkIdentity({ site }: { readonly site: SiteView }) {
   const { identity } = site.config;
   return (
     <div className="epk-identity">
       <p className="claim">{identity.claim}</p>
-      <h2>Bio breve</h2>
-      <p>{identity.shortBio}</p>
-      <h2>Bio lunga</h2>
-      <p>{identity.longBio}</p>
       <h2>Base</h2>
       <p>{identity.location}</p>
     </div>

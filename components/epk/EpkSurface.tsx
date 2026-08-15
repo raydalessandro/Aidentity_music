@@ -4,6 +4,7 @@ import { EpkLinks } from "./EpkLinks";
 import { EpkLiveDates } from "./EpkLiveDates";
 import { EpkMetrics } from "./EpkMetrics";
 import { EpkPress } from "./EpkPress";
+import { publishableContacts } from "./select";
 import { styles } from "./styles";
 import type { EpkContent } from "./types";
 
@@ -44,7 +45,8 @@ export type EpkSurfaceProps = {
 export function EpkSurface({ content, now, id = "epk", label = "EPK" }: EpkSurfaceProps) {
   return (
     <section id={id} style={styles.root} aria-label={label}>
-      <EpkContacts contacts={content.contacts} id={id} />
+      {/* `content.contacts` sono righe di tabella: il consenso si applica qui, una volta sola. */}
+      <EpkContacts contacts={publishableContacts(content.contacts)} id={id} />
       <EpkBio shortBio={content.shortBio} longBio={content.longBio} id={id} />
       <EpkLinks links={content.links} id={id} />
       <EpkPress press={content.press} id={id} />

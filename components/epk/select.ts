@@ -15,6 +15,7 @@ import {
   contactRoles,
   linkProviders,
   type EpkContact,
+  type EpkContactRecord,
   type EpkLink,
   type EpkLiveDate,
   type EpkMetric,
@@ -28,17 +29,20 @@ const roleRank = new Map(contactRoles.map((role, index) => [role, index] as cons
 const providerRank = new Map(linkProviders.map((provider, index) => [provider, index] as const));
 
 /**
- * Contatti pubblicabili.
+ * Contatti renderizzabili: validità e ordinamento, **niente consenso**.
  *
- * **Invariante del consenso (L0.7 §2, §5): si rende solo chi ha
- * `consent_confirmed_at` valorizzato.** Nessuna eccezione, nessun fallback.
+ * È ciò che usa `EpkContacts`, e il tipo dice perché: una `EpkContact` è già una riga di
+ * render, cioè una riga per cui la domanda sul consenso ha ricevuto risposta a monte — dalla
+ * vista `public_contacts`, oppure da `publishableContacts`. Qui si scarta solo ciò che non si
+ * può rendere: ruolo fuori dall'insieme chiuso di L0.7 §5, nome vuoto, email che non è
+ * un'email. I tipi dichiarano insiemi chiusi ma non sono un confine di runtime, e il JSON
+ * arriva da un database che il componente non controlla.
  *
  * Ordine: `sort_order` scelto dall'artista, poi l'ordine canonico dei ruoli
  * (booking, management, stampa), poi il nome.
  */
-export function publishableContacts(contacts: readonly EpkContact[]): EpkContact[] {
+export function renderableContacts(contacts: readonly EpkContact[]): EpkContact[] {
   return contacts
-    .filter((contact) => filled(contact.consent_confirmed_at))
     .filter(
       (contact) =>
         roleRank.has(contact.role) &&
@@ -52,6 +56,28 @@ export function publishableContacts(contacts: readonly EpkContact[]): EpkContact
         (roleRank.get(left.role) ?? 0) - (roleRank.get(right.role) ?? 0) ||
         left.name.localeCompare(right.name, "it"),
     );
+}
+
+/**
+ * Contatti pubblicabili: **il solo ponte fra la riga di tabella e la riga di render**.
+ *
+ * **Invariante del consenso (L0.7 §2, §5): si pubblica solo chi ha
+ * `consent_confirmed_at` valorizzato.** Nessuna eccezione, nessun fallback.
+ *
+ * La firma è la metà del presidio: prende `EpkContactRecord` e restituisce `EpkContact`, e
+ * `EpkContactRecord` non è assegnabile a `EpkContact` (si veda `types.ts`). Chi ha in mano
+ * righe di tabella e vuole renderle **deve** passare di qui — non c'è un'altra strada che
+ * compili. È anche l'unico punto del filone E in cui `consent_confirmed_at` viene letto.
+ *
+ * Il campo non viene solo filtrato, viene **lasciato indietro**: la riga di render si
+ * ricostruisce campo per campo, così il timestamp del consenso non attraversa nemmeno per
+ * sbaglio il confine verso il markup (L0.7 §6.3).
+ */
+export function publishableContacts(contacts: readonly EpkContactRecord[]): EpkContact[] {
+  const consented = contacts
+    .filter((contact) => filled(contact.consent_confirmed_at))
+    .map(({ id, role, name, email, sort_order }): EpkContact => ({ id, role, name, email, sort_order }));
+  return renderableContacts(consented);
 }
 
 /**
