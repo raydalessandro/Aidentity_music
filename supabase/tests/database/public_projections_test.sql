@@ -10,12 +10,16 @@
 -- essere esattamente l'allowlist dichiarata qui. Una colonna aggiunta domani a una
 -- tabella base non può scivolare dentro una proiezione in silenzio.
 --
--- NOTA su email e URL embed della fixture (contengono una barra rovesciata):
--- il CHECK di `site_contacts.email` e `private.valid_embed_url` di PR-0 usano `\\.`
--- dentro stringhe standard-conforming, quindi pretendono una barra rovesciata
--- letterale nel valore: nessuna email o URL provider ordinaria li supera. La fixture
--- usa valori che il vincolo attuale accetta. Non "correggere" queste stringhe senza
--- prima correggere i vincoli in PR-0: il test diventerebbe rosso per il motivo sbagliato.
+-- NOTA su email e URL embed della fixture: usano valori ordinari, ed è voluto.
+-- Quando questo file è stato scritto, il CHECK di `site_contacts.email` e
+-- `private.valid_embed_url` contenevano `\\.` dentro stringhe standard-conforming
+-- e pretendevano quindi una barra rovesciata letterale nel valore: nessuna email né
+-- URL provider reale li superava, e la fixture era stata piegata a quella forma per
+-- non diventare rossa per il motivo sbagliato. Il difetto è stato corretto dalla
+-- migrazione `20260815170128_pr_0_fix_regex_escaping.sql`, che ha reso quei valori
+-- piegati non più inseribili — giustamente. Da qui in avanti la fixture usa
+-- `https://open.spotify.com/…` e `booking@nvll.test`: se un giorno tornassero
+-- rossi, il difetto è nel vincolo, non in queste stringhe.
 
 begin;
 select plan(97);
@@ -33,7 +37,7 @@ insert into public.site_tracks (id, site_id, title, source, storage_path, mime_t
   ('b1b1b1b1-0000-0000-0000-000000000002','22222222-2222-2222-2222-222222222222','Traccia purgata','upload','test/a-purged.mp3','audio/mpeg',3072,120,1);
 update public.site_tracks set purged_at = now() where id = 'b1b1b1b1-0000-0000-0000-000000000002';
 insert into public.site_tracks (id, site_id, title, source, embed_provider, embed_url, sort_order) values
-  ('b1b1b1b1-0000-0000-0000-000000000003','22222222-2222-2222-2222-222222222222','Traccia embed','embed','spotify','https://open\.spotify\.com/track/fixture',2);
+  ('b1b1b1b1-0000-0000-0000-000000000003','22222222-2222-2222-2222-222222222222','Traccia embed','embed','spotify','https://open.spotify.com/track/fixture',2);
 
 insert into public.site_posts (id, site_id, kind, visual_asset_id, track_id, cover_asset_id, caption, sort_order) values
   ('c1c1c1c1-0000-0000-0000-000000000001','22222222-2222-2222-2222-222222222222','visual','a1a1a1a1-0000-0000-0000-000000000001',null,null,'post visual valido',0),
@@ -51,9 +55,9 @@ insert into public.site_dates (id, site_id, starts_at, city, venue, ticket_url, 
 insert into public.site_metrics (id, site_id, label, value, sort_order) values
   ('01010101-0000-0000-0000-000000000001','22222222-2222-2222-2222-222222222222','Ascoltatori mensili','12.000',0);
 insert into public.site_contacts (id, site_id, role, name, email, consent_confirmed_at, consent_confirmed_by, sort_order) values
-  ('02020202-0000-0000-0000-000000000001','22222222-2222-2222-2222-222222222222','booking','Booker Consenziente','booking@nvll\.test',now(),'11111111-1111-1111-1111-111111111111',0);
+  ('02020202-0000-0000-0000-000000000001','22222222-2222-2222-2222-222222222222','booking','Booker Consenziente','booking@nvll.test',now(),'11111111-1111-1111-1111-111111111111',0);
 insert into public.site_contacts (id, site_id, role, name, email, sort_order) values
-  ('02020202-0000-0000-0000-000000000002','22222222-2222-2222-2222-222222222222','press','Ufficio Stampa Senza Consenso','press@nvll\.test',1);
+  ('02020202-0000-0000-0000-000000000002','22222222-2222-2222-2222-222222222222','press','Ufficio Stampa Senza Consenso','press@nvll.test',1);
 
 -- Sito B: draft con contenuto completo e contatto CONSENZIENTE. Nulla di questo è pubblico.
 insert into public.site_posts (id, site_id, kind, visual_asset_id, sort_order) values
@@ -67,7 +71,7 @@ insert into public.site_dates (id, site_id, starts_at, city, venue, sort_order) 
 insert into public.site_metrics (id, site_id, label, value, sort_order) values
   ('0d0d0d0d-0000-0000-0000-000000000005','55555555-5555-5555-5555-555555555555','Follower','1',0);
 insert into public.site_contacts (id, site_id, role, name, email, consent_confirmed_at, consent_confirmed_by, sort_order) values
-  ('0d0d0d0d-0000-0000-0000-000000000006','55555555-5555-5555-5555-555555555555','booking','Booker Draft','draft@ownerb\.test',now(),'44444444-4444-4444-4444-444444444444',0);
+  ('0d0d0d0d-0000-0000-0000-000000000006','55555555-5555-5555-5555-555555555555','booking','Booker Draft','draft@ownerb.test',now(),'44444444-4444-4444-4444-444444444444',0);
 insert into public.site_tracks (id, site_id, title, source, storage_path, mime_type, byte_size, sort_order) values
   ('0d0d0d0d-0000-0000-0000-000000000007','55555555-5555-5555-5555-555555555555','Traccia draft','upload','test/b-track.mp3','audio/mpeg',3072,0);
 
@@ -293,7 +297,7 @@ select results_eq(
   array['upload'], 'upload: la proiezione dichiara source=upload, la route firma l''URL partendo dall''id');
 select results_eq(
   $$select embed_url from public.public_tracks where id='b1b1b1b1-0000-0000-0000-000000000003'$$,
-  array['https://open\.spotify\.com/track/fixture'], 'embed: l''URL provider resta pubblico, è già esterno');
+  array['https://open.spotify.com/track/fixture'], 'embed: l''URL provider resta pubblico, è già esterno');
 reset role;
 
 -- ---------------------------------------------------------------------------
