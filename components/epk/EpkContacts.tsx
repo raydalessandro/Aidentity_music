@@ -1,5 +1,5 @@
 import { mailtoHref } from "./format";
-import { publishableContacts } from "./select";
+import { renderableContacts } from "./select";
 import { styles } from "./styles";
 import type { ContactRole, EpkContact } from "./types";
 
@@ -21,13 +21,17 @@ export type EpkContactsProps = {
  * telefono. L'email è testo visibile **ed** è il bersaglio del `mailto:`: si
  * legge e si tocca senza aprire altro.
  *
- * Il filtro sul consenso è in `publishableContacts`: qui non c'è una seconda
- * copia della regola, così esiste un solo posto in cui può rompersi.
- * Se nessun contatto ha consenso, la sezione non esiste: non si scrive
+ * Il consenso qui non si controlla, e non è una dimenticanza: il tipo `EpkContact`
+ * non ha il campo, quindi una riga che arriva fin qui **è già pubblicabile** — o
+ * viene da `public_contacts`, che filtra in SQL, o è passata da
+ * `publishableContacts`, che è l'unico ponte dalla riga di tabella e l'unico
+ * punto in cui il campo viene letto. Una seconda copia della regola qui sarebbe
+ * un secondo posto in cui può rompersi; il compilatore fa meglio di lei.
+ * Se nessun contatto è pubblicabile, la sezione non esiste: non si scrive
  * “nessun contatto disponibile”.
  */
 export function EpkContacts({ contacts, id = "epk" }: EpkContactsProps) {
-  const published = publishableContacts(contacts);
+  const published = renderableContacts(contacts);
   if (published.length === 0) return null;
   const headingId = `${id}-contatti`;
 

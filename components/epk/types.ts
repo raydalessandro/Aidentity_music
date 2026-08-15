@@ -10,6 +10,18 @@
  *
  * Dove L0.7 §5 impone un insieme chiuso (provider dei link, ruoli contatto) il
  * tipo è quell'insieme chiuso, non `string`.
+ *
+ * ── I contatti hanno due tipi, e la differenza è il consenso ──────────────────
+ *
+ * Per i contatti «la colonna» non è una sola cosa. `site_contacts` ha
+ * `consent_confirmed_at`; la proiezione pubblica `public_contacts` **non ce l'ha
+ * e non può averla**, perché L0.7 §6.3 tiene il consenso fuori dalle proiezioni
+ * e lì è un filtro di riga. Un unico tipo per entrambe le forme costringe o a
+ * inventare il campo dove non c'è, o a rinunciare al filtro dove c'è.
+ *
+ * Quindi le forme sono due, e il confine è controllato dal compilatore:
+ * `EpkContactRecord` è la riga di tabella, `EpkContact` è la riga di render, e
+ * l'unico ponte fra le due è `publishableContacts` (si veda `select.ts`).
  */
 
 /** `public.contact_role` — L0.7 §5. */
@@ -27,15 +39,40 @@ export const linkProviders = [
 ] as const;
 export type LinkProvider = (typeof linkProviders)[number];
 
-/** Riga di `site_contacts`. `consent_confirmed_at` è l'unico lasciapassare per la pubblicazione. */
+/**
+ * Contatto **in forma di render**: ciò che `EpkContacts` accetta e che può finire nel markup.
+ *
+ * Sono esattamente le colonne di `public_contacts`, quindi il filone D le passa così come
+ * arrivano da `loadEpk`, senza adattatori. Non ha `consent_confirmed_at` perché a questo
+ * punto la domanda sul consenso ha già ricevuto risposta: una riga che è qui è pubblicabile.
+ *
+ * `consent_confirmed_at?: never` non è una decorazione ed è il cuore del presidio. Rende
+ * `EpkContactRecord` **non assegnabile** a `EpkContact`: una riga di tabella non può entrare
+ * in un componente di render nemmeno per distrazione, e il compilatore lo dice prima che il
+ * codice esista. Serve per domani più che per oggi — il wizard del filone C leggerà i contatti
+ * dell'owner **dalle tabelle**, dove il campo esiste e può essere nullo; senza questa riga,
+ * rendere quelle righe con `EpkContacts` mostrerebbe come pubblicato un contatto che non lo è,
+ * e nulla lo segnalerebbe. La sonda `contact-boundary.probe.ts` misura entrambe le direzioni.
+ */
 export type EpkContact = {
   id: string;
   role: ContactRole;
   name: string;
   email: string;
-  /** ISO 8601 se il consenso è confermato, `null` altrimenti. Senza consenso il contatto non si rende. */
-  consent_confirmed_at: string | null;
   sort_order: number;
+  /** Presidio di tipo, non un dato: una riga che porta il consenso non è una riga di render. */
+  consent_confirmed_at?: never;
+};
+
+/**
+ * Contatto **in forma di riga di tabella**: `site_contacts` letta dall'owner (filone C).
+ *
+ * `consent_confirmed_at` è ISO 8601 se il consenso è confermato, `null` altrimenti, ed è
+ * l'unico lasciapassare per la pubblicazione. Non si rende direttamente: passa da
+ * `publishableContacts`, che è anche il solo punto in cui il campo viene letto.
+ */
+export type EpkContactRecord = Omit<EpkContact, "consent_confirmed_at"> & {
+  consent_confirmed_at: string | null;
 };
 
 /** Riga di `site_links`. */
@@ -84,7 +121,8 @@ export type EpkMetric = {
 export type EpkContent = {
   shortBio: string | null;
   longBio: string | null;
-  contacts: readonly EpkContact[];
+  /** Righe di tabella: `EpkSurface` le fa passare da `publishableContacts` prima di renderle. */
+  contacts: readonly EpkContactRecord[];
   links: readonly EpkLink[];
   press: readonly EpkPressQuote[];
   dates: readonly EpkLiveDate[];

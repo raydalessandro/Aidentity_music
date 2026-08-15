@@ -11,7 +11,14 @@
  * Non è esportata da `index.ts`: è materiale di prova, non prodotto.
  */
 
-import type { EpkContact, EpkContent, EpkLink, EpkLiveDate, EpkMetric, EpkPressQuote } from "./types";
+import type {
+  EpkContactRecord,
+  EpkContent,
+  EpkLink,
+  EpkLiveDate,
+  EpkMetric,
+  EpkPressQuote,
+} from "./types";
 
 /**
  * Riga che i tipi vieterebbero ma che la rete può consegnare comunque: i dati
@@ -25,7 +32,8 @@ function hostile<T>(row: Record<string, unknown>): T {
 /** Riferimento temporale fisso: le date di prova sono relative a questo istante. */
 export const fixtureNow = new Date("2026-08-15T12:00:00Z");
 
-export const fixtureContacts: readonly EpkContact[] = [
+/** Righe di tabella (`site_contacts`), non righe di render: portano il campo del consenso. */
+export const fixtureContacts: readonly EpkContactRecord[] = [
   {
     id: "contact-booking",
     role: "booking",

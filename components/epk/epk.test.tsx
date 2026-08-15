@@ -21,6 +21,7 @@ import {
   publishableLinks,
   publishableMetrics,
   publishablePress,
+  renderableContacts,
   splitLiveDates,
 } from "./select";
 import type { EpkContent } from "./types";
@@ -93,6 +94,33 @@ describe("invariante del consenso", () => {
   it("il markup reso non contiene l'email del contatto senza consenso", () => {
     expect(markup).not.toContain("nonconsentito@nvllclick.example");
     expect(markup).toContain("mailto:booking@nvllclick.example");
+  });
+
+  /**
+   * Il ponte non filtra soltanto: lascia indietro il campo. È la differenza fra «il consenso
+   * non ha aperto la strada a questa riga» e «il timestamp del consenso non esiste più da qui
+   * in poi» — la seconda è quella che L0.7 §6.3 pretende, perché ciò che non c'è non può
+   * finire in un `data-*`, in un log o in un payload di idratazione.
+   */
+  it("publishableContacts consegna righe di render: il timestamp del consenso resta indietro", () => {
+    for (const contact of publishableContacts(fixtureContacts)) {
+      expect(Object.keys(contact).sort()).toEqual(["email", "id", "name", "role", "sort_order"]);
+    }
+    expect(markup).not.toContain("2026-07-01T09:00:00");
+  });
+
+  /**
+   * La divisione dei ruoli, dichiarata: `renderableContacts` **non** giudica il consenso, e non
+   * potrebbe — il suo tipo non ha il campo. Chi ha righe di tabella deve passare dal ponte, e
+   * `contact-boundary.probe.ts` dimostra che non esiste un'altra strada che compili.
+   */
+  it("renderableContacts giudica validità e ordine, non il consenso", () => {
+    const resi = renderableContacts([
+      { id: "b", role: "press", name: "Seconda", email: "b@esempio.example", sort_order: 1 },
+      { id: "a", role: "booking", name: "Prima", email: "a@esempio.example", sort_order: 0 },
+      { id: "rotta", role: "booking", name: "Email Rotta", email: "senza-chiocciola", sort_order: 2 },
+    ]);
+    expect(resi.map((contact) => contact.id)).toEqual(["a", "b"]);
   });
 });
 

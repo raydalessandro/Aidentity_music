@@ -88,11 +88,28 @@ describe("il renderer è parametrico", () => {
     expect(second).toContain('aria-current="page"');
   });
 
-  it("EPK rende bio e luogo del sito, non un testo fisso", async () => {
+  it("EPK rende claim e luogo del sito, non un testo fisso", async () => {
+    const primo = renderToStaticMarkup(<EpkIdentity site={await siteView("nvll-click")} />);
+    const secondo = renderToStaticMarkup(<EpkIdentity site={await siteView("miriam-serra")} />);
+
+    expect(primo).toContain("Electro-pop italiano");
+    expect(primo).toContain("Milano");
+    expect(secondo).toContain("CANZONI LENTE, LUCI APERTE");
+    expect(secondo).toContain("Bologna");
+    expect(secondo).not.toContain("Milano");
+  });
+
+  /**
+   * Le bio non stanno più qui: da quando la route EPK monta `EpkBio` di `components/epk`,
+   * quel componente le rende copiabili (L0.7 §2) ed è il solo a renderle. Se tornassero anche
+   * in `EpkIdentity`, la pagina stamperebbe due volte lo stesso testo e due intestazioni con
+   * lo stesso nome — questo test è ciò che lo impedisce di nascosto.
+   */
+  it("EpkIdentity non ristampa le bio: quelle appartengono a EpkBio", async () => {
     const markup = renderToStaticMarkup(<EpkIdentity site={await siteView("nvll-click")} />);
-    expect(markup).toContain("Fixture locale.");
-    expect(markup).toContain("Fixture locale per reset e test CI.");
-    expect(markup).toContain("Milano");
+    expect(markup).not.toContain("Fixture locale per reset e test CI.");
+    expect(markup).not.toContain("Bio breve");
+    expect(markup).not.toContain("Bio lunga");
   });
 });
 
