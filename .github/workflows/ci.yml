@@ -1,0 +1,95 @@
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  app:
+    name: App
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: typecheck, lint, build
+        run: npm run check
+
+  db:
+    name: Database
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Avvia lo stack locale
+        run: supabase start -x realtime,imgproxy,studio,edge-runtime,logflare,vector
+
+      # Il test vero: lo schema deve ricostruirsi dal nulla, ogni volta.
+      - name: Ricostruzione da zero (migrazioni + seed)
+        run: supabase db reset
+
+      - name: Lint dello schema
+        run: supabase db lint --fail-on error
+
+      - name: Test pgTAP (RLS, quote, moderazione)
+        run: supabase test db
+
+      - name: Nessuna migrazione fuori sincrono
+        run: |
+          supabase db diff --schema public > /tmp/diff.sql
+          if [ -s /tmp/diff.sql ]; then
+            echo "Lo schema applicato non corrisponde alle migrazioni:"
+            cat /tmp/diff.sql
+            exit 1
+          fi
+
+  e2e:
+    name: E2E e accessibilità
+    runs-on: ubuntu-latest
+    # Resta inattivo finché il filone D non introduce i test.
+    if: hashFiles('e2e/**') != ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+
+  secrets:
+    name: Segreti
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scansione del diff
+        run: |
+          BASE="${{ github.event.pull_request.base.sha || github.event.before }}"
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+            BASE=$(git rev-list --max-parents=0 HEAD | tail -1)
+          fi
+          if git diff --no-color "$BASE"...HEAD \
+             | grep -nE 'sk_live_|rk_live_|whsec_|eyJhbGciOi'; then
+            echo "::error::Possibile chiave o token nel diff."
+            exit 1
+          fi
+          echo "Pulito."
