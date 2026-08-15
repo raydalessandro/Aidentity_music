@@ -238,7 +238,7 @@ alter table public.site_slug_redirects enable row level security; alter table pu
 create policy plans_read on public.plans for select to anon,authenticated using(true);
 create policy profile_own on public.profiles for select to authenticated using(id=(select auth.uid()) or private.is_platform_admin());
 create policy profile_update on public.profiles for update to authenticated using(id=(select auth.uid())) with check(id=(select auth.uid()));
-create policy sites_own on public.sites for select to authenticated using(owner_id=(select auth.uid()) or private.is_platform_admin());
+create policy sites_own on public.sites for select to authenticated using(true); -- MUTATION TEST: intentionally unsafe
 create policy sites_public on public.sites for select to anon using(publication_status='published');
 create policy config_own on public.site_config for all to authenticated using(private.is_site_owner(site_id) or private.is_platform_admin()) with check(private.is_site_owner(site_id));
 create policy config_public on public.site_config for select to anon using(exists(select 1 from public.sites s where s.id=site_id and s.publication_status='published'));
