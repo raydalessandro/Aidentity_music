@@ -1,49 +1,63 @@
 # AIDENTITY — Follow-up tecnici
 
-Questo registro vive alla radice del repository per rendere visibili i lavori rimandati senza ampliare indebitamente una pull request. Ogni voce va chiusa tramite branch e pull request dedicate.
+Questo registro vive alla radice del repository per rendere visibili i lavori rimandati senza
+ampliare indebitamente una pull request. Ogni voce va chiusa tramite branch e pull request dedicate.
 
-## Da completare prima del merge di PR-0
+Allineato dopo l'Onda 1, l'Onda 2 e le correzioni di sicurezza emerse dal primo contatto con un
+database Supabase reale.
 
-| Voce | Criterio di chiusura |
-|---|---|
-| Privilegi delle funzioni e preview link | pgTAP verifica che `PUBLIC`, `anon` e `authenticated` non possano eseguire funzioni privilegiate o trigger function; verifica inoltre che `site_preview_links` conservi un hash, non un token in chiaro. |
-| RLS globale resistente alle nuove tabelle | pgTAP interroga tutte le tabelle del solo schema `public`, meno una allowlist dichiarata, e richiede sia RLS sia FORCE RLS per ogni relazione esposta. |
+---
 
-## Follow-up dopo il merge di PR-0
+## 1. Prima del deploy
 
-| Voce | Criterio di chiusura |
-|---|---|
-| Lifecycle prenotazioni e quote | Coprire release/scadenza idempotenti delle prenotazioni, neutralità degli embed e downgrade oltre quota che riporta il sito a `draft` senza cancellare contenuti. |
-| Superfici pubbliche minime | Estendere i test delle proiezioni pubbliche: oltre a `owner_id`, escludere consenso, `storage_path` e byte/metadati interni. |
+Queste non sono migliorie. Sono le cose che, se restano com'è, si manifestano **come difetti del
+prodotto davanti a un utente reale** — e alcune non si vedono in CI, perché la CI gira su uno stack
+locale che non ha gli stessi default del cloud.
 
-## Follow-up dopo il merge del filone A (non bloccanti)
+| Voce | Perché prima del deploy | Criterio di chiusura |
+|---|---|---|
+| **Configurazione dell'ambiente ospitato** | L'applicazione senza variabili risponde 500 su ogni superficie: `readSiteUrl` e i client Supabase falliscono alla costruzione. Non è un difetto del codice, ma il primo caricamento della home lo sembra. | Su Vercel sono impostate `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_SITE_URL`, `SUPABASE_SERVICE_ROLE_KEY` e le sei `STRIPE_*` in modalità test. `NEXT_PUBLIC_SITE_URL` è il dominio vero, non un indirizzo di loopback. |
+| **Limite di upload del progetto ospitato** | `supabase/config.toml` governa **solo** lo stack locale e la CI. Il progetto cloud ha un limite proprio, e finché resta sotto i 256 MiB una traccia grande viene rifiutata dallo Storage con un errore che non nasce dal nostro codice. | Il limite globale del progetto è ≥ `268435456` byte, cioè il `file_size_limit` del bucket `site-tracks`. Verificato caricando davvero una traccia oltre i 50 MiB. |
+| **URL di reindirizzo dell'autenticazione** | Supabase valida `emailRedirectTo` contro una lista. Se il callback con la query `?next=…` non corrisponde, il magic link **funziona** ma riporta sempre alla home: l'utente entra e perde la destinazione, e sembra un difetto dell'applicazione. | Nella dashboard Supabase, `Site URL` è il dominio di produzione e la lista dei Redirect URLs contiene il callback. Verificato accedendo da `/login?next=/app/wizard` e atterrando sul wizard. |
+| **Immagini senza testo alternativo** | `site_assets` non ha `alt`, né larghezza, né altezza. Ora che le immagini vengono rese davvero, ogni `<img>` di HOME e FEED esce senza alternativa testuale: è una barriera per chi usa uno screen reader, e axe la segnalerà sulla prima superficie pubblica con una foto. | Lo schema porta un testo alternativo per asset, il wizard lo raccoglie come campo obbligatorio per gli asset visibili, il renderer lo usa, e un test e2e con axe passa su una pagina che contiene almeno un'immagine reale. |
+| **Retention: avvisi e purge non esistono** | La migrazione del billing valorizza correttamente `subscription_ended_at` e `purge_after = ended_at + 90 giorni`, ma **non c'è nulla che li esegua**. Un sito disdetto oggi accumula una data di purga che nessuno onora: gli avvisi a 60 e 80 giorni non partono e al giorno 90 gli oggetti Storage restano. È un impegno verso l'utente, non solo pulizia. | Esiste un'esecuzione periodica che manda gli avvisi a 60 e 80 giorni, e al giorno 90 elimina gli oggetti Storage, scrive `assets_purged_at` e conserva la riga come tombstone, con un test che dimostra l'idempotenza (eseguirla due volte non cancella due volte, e non tocca un sito ripubblicato nel frattempo). |
+| **Registrazione del webhook Stripe** | Il webhook è l'unico scrittore di `sites.publication_status`. Se l'endpoint non è registrato sul dominio di produzione, un pagamento valido non pubblica niente e il sito resta in bozza senza che nulla lo segnali. | L'endpoint punta a `/api/stripe/webhook` sul dominio vero, il segreto di firma è impostato, e un pagamento con carta di test porta un sito da `draft` a `pending_review`. |
 
-Nessuna delle due voci rende falso un test verde di oggi: entrambe descrivono un
-banco che oggi non saprebbe diventare rosso quando dovrebbe.
+---
 
-| Voce | Criterio di chiusura |
-|---|---|
-| `parseRgb` legge uno sfondo trasparente come nero | In `e2e/shell.spec.ts` la funzione scarta il canale alfa: `rgba(0, 0, 0, 0)` diventa `[0, 0, 0]`, indistinguibile da un nero pieno. Finché `.player-shell button` ha un `background` proprio il numero è giusto per caso; il giorno in cui un elemento lo perde, il test misura il contrasto contro un nero inesistente e riporta un valore falso — in entrambe le direzioni. Chiuso quando il test risolve lo sfondo effettivo risalendo gli antenati per ogni colore con alfa inferiore a 1 (o compone il colore sopra lo sfondo ereditato) e una prova di mutazione rimuove il `background` da `.player-shell button` mostrando il test rosso sul contrasto reale, non un numero inventato. |
-| Nessun test verifica che le tre famiglie di icone rendano diverse | `iconFamily` è coperta solo come enum in `lib/contract.ts`: nessun test tocca `.icons-line`, `.icons-block`, `.icons-stencil`. Le tre regole vivono solo in `app/globals.css` e si potrebbero cancellare con la CI verde. Chiuso quando un test e2e confronta i valori calcolati di `.shell-icon` (`fill`, `stroke`, `stroke-width`, `stroke-linecap`, `stroke-dasharray`) sotto le tre famiglie e richiede che le rese siano distinte a due a due, e la prova di mutazione cancella le regole `.icons-*` mostrando la CI rossa su quel test. |
-
-## Follow-up dopo l'Onda 1
-
-| Voce | Criterio di chiusura |
-|---|---|
-| Allargare gli host embed oltre L0.7 §5 | Deciso da Ray: si farà, ma non ora. Oggi l'allowlist ammette una sola forma canonica per provider, quindi un artista che incolla il link condiviso dal telefono o uno short link se lo vede rifiutare e deve mettersi a cercare la forma giusta. Non è un difetto: è attrito, e va tolto. Chiuso quando l'insieme ammesso copre le forme che le piattaforme producono davvero (per esempio `m.youtube.com`, gli short link Spotify) **e** L0.7 §5 è emendata di conseguenza: §5 è normativa, quindi allargare la lista solo in migrazione la metterebbe in violazione. Serve un test che rifiuti comunque un host che *contiene* un dominio ammesso senza esserlo (`open.spotify.com.evil.test`): allargare non deve aprire una crepa. |
-| `next dev` riscrive `AGENTS.md` | A ogni avvio del dev server Next aggiunge da sé un blocco `nextjs-agent-rules` al file e ne suggerisce il commit. Succede a ogni agente che lavora in locale e a ogni run del job e2e in CI; finora è sempre stato ripristinato a mano senza committarlo. `AGENTS.md` è un documento normativo: un tool che lo modifica da solo è un problema di governo, non di formattazione. Chiuso quando o il blocco è accettato consapevolmente e committato una volta, o la generazione è disattivata — con un test o un controllo in CI che rende rosso un `AGENTS.md` modificato dal tool. |
-| `service_role` non può inserire una traccia embed | Osservato costruendo questa correzione, **su impalcatura locale e non ancora confermato sullo stack Supabase**: sotto `set local role service_role` l'insert fallisce con `42501: permission denied for function valid_embed_url`. La migrazione fa `revoke all on schema private from public` e nessun ruolo riceve `usage` su `private`, mentre il CHECK di `site_tracks` valuta `private.valid_embed_url` con i privilegi di chi scrive. Non è l'escaping — resta rotto anche dopo questa PR. Chiuso quando un pgTAP inserisce una traccia embed **assumendo esplicitamente i ruoli reali** (`authenticated` come owner e `service_role` come backend) e passa, e la stessa verifica copre le altre funzioni `private` usate nelle policy RLS. Da confermare per primo sullo stack Supabase vero: se là i grant sono diversi, la voce si chiude come non-difetto e resta il test. |
-
-## Saldature dopo l'Onda 1 — senza queste il prodotto non funziona
-
-Le tre voci qui sotto non sono difetti di una PR: sono i punti in cui due filoni
-si affacciano l'uno sull'altro e nessuno dei due, per perimetro, poteva fare il
-collegamento. Ognuna è stata verificata sul codice, non dedotta.
+## 2. Debito dichiarato, non bloccante
 
 | Voce | Criterio di chiusura |
 |---|---|
-| I media non arrivano ad `anon` | Verificato: **nessuna route media esiste in nessun branch**, e `createSignedUrl`/`getPublicUrl` non compaiono da nessuna parte. Le proiezioni pubbliche escludono `storage_path` — correttamente, per L0.7 §6.3 — e rimandano a una route server che firma un URL a vita breve. Quella route non è mai stata assegnata a un filone. Finché manca, un sito pubblicato va online **senza immagini e senza audio**: HOME non ha visual principale e nessuna traccia `upload` è riproducibile. Chiuso quando esiste una route server che, dato l'`id` di un asset o di una traccia, verifica che il sito sia `published` e che la riga non sia purgata, risolve il path con privilegi elevati e restituisce un URL firmato a scadenza breve; con un test che dimostra che l'asset di un sito `draft` e quello di un altro tenant **non** sono ottenibili, e che il path non compare mai nella risposta. |
-| I componenti EPK non sono collegati alla route EPK | Verificato: `app/[slug]/epk/page.tsx` importa `EpkIdentity` da `../surface-content`, **non** da `components/epk`. E ha costruito i componenti con i tipi allineati alle colonne del database, D ha costruito la route: il cablaggio non era nel perimetro di nessuno dei due. Oggi la superficie EPK rende solo bio e identità, e i componenti di E non li usa nessuno. Chiuso quando la route rende i componenti di `components/epk` con i dati che `loadEpk` restituisce, senza adattatori intermedi — i tipi di E sono già allineati alle colonne apposta — e un test dimostra che un contatto senza consenso non compare nella pagina resa, non solo nella funzione di selezione. |
-| `SiteReader` e il client di B non sono saldati | Verificato: `configureSiteReader` **non ha alcun chiamante** fuori dal proprio modulo. D si è fermato prima del wiring per istruzione esplicita, e ha fatto bene: l'interfaccia è sua e non deve importare il client. Ma la saldatura ora tocca a qualcuno. Finché manca, **ogni slug risponde 404** — il renderer è completo e non legge niente. Chiuso quando esiste un adattatore che implementa i sei metodi di `SiteReader` sopra il client server anonimo di `lib/supabase/public-reader.ts`, e un solo punto fuori da `app/[slug]/**` chiama `configureSiteReader`. Il presidio che vieta a `app/[slug]/**` di importare il client Supabase resta valido e non va allentato: l'adattatore vive fuori da quel perimetro. |
+| `parseRgb` legge uno sfondo trasparente come nero | In `e2e/shell.spec.ts` la funzione scarta il canale alfa: `rgba(0, 0, 0, 0)` diventa `[0, 0, 0]`, indistinguibile da un nero pieno. Finché ogni elemento misurato ha un `background` proprio il numero è giusto per caso. Chiuso quando il test risolve lo sfondo effettivo per ogni colore con alfa inferiore a 1, e una prova di mutazione rimuove il `background` da `.player-shell button` mostrando il test rosso sul contrasto reale. |
+| Nessun test verifica che le tre famiglie di icone rendano diverse | `iconFamily` è coperta solo come enum in `lib/contract.ts`. Le tre regole vivono solo in `app/globals.css` e si potrebbero cancellare con la CI verde. Chiuso quando un test e2e confronta i valori calcolati di `.shell-icon` sotto `icons-line`, `icons-block` e `icons-stencil` e richiede rese distinte a due a due, con la mutazione che cancella le regole e mostra il rosso. |
+| Allargare gli host embed oltre L0.7 §5 | Deciso da Ray: si farà, ma non ora. Oggi un artista che incolla il link condiviso dal telefono o uno short link se lo vede rifiutare. Chiuso quando l'insieme ammesso copre le forme che le piattaforme producono davvero **e** L0.7 §5 è emendata di conseguenza — §5 è normativa, allargare solo in migrazione la metterebbe in violazione. Serve un test che rifiuti comunque un host che *contiene* un dominio ammesso senza esserlo (`open.spotify.com.evil.test`). |
+| `next dev` riscrive `AGENTS.md` | A ogni avvio Next aggiunge da sé un blocco `nextjs-agent-rules` e ne suggerisce il commit. Succede a ogni agente in locale e a ogni run del job e2e. `AGENTS.md` è un documento normativo: un tool che lo modifica da solo è un problema di governo. Chiuso quando o il blocco è accettato consapevolmente una volta, o la generazione è disattivata, con un controllo in CI che rende rosso un `AGENTS.md` modificato dal tool. |
+| `site_slug_redirects` ha RLS senza policy | Segnalato dagli advisor Supabase come `rls_enabled_no_policy`. Oggi è fail-closed corretto perché nessuno cambia slug. Ma L0.7 §5 richiede un redirect prima che uno slug pubblicato possa cambiare: quando quella funzione servirà, `anon` dovrà risolverlo durante il routing. Chiuso insieme alla funzione di rinomina dello slug, con la policy e il test che dimostra che il redirect di un tenant non espone quello di un altro. |
+| Chiavi esterne senza indice su `site_posts` | Gli advisor ne segnalano dodici; dieci sono irrilevanti o su tabelle fredde. I tre su `site_posts` (`visual_asset_id`, `track_id`, `cover_asset_id`) stanno sui LEFT JOIN che `public_posts` esegue **a ogni lettura pubblica di FEED**. Chiuso quando esistono gli indici e una misura mostra il piano di esecuzione prima e dopo su un sito con contenuti veri — non prima, perché su un database vuoto la misura non significa niente. |
+| `service_role` ha tutti i privilegi su `public_sites` e `public_tracks` | Asimmetria nota rispetto alle otto proiezioni nuove, che hanno solo `select`. Deriva dal `grant all on all tables` di PR-0: per il catalogo una vista è una tabella. È una decisione deliberata di PR-0 e restringerla è una preoccupazione a sé. Chiuso quando le dieci proiezioni hanno la stessa forma, o quando la differenza è motivata per iscritto nel contratto. |
 
-> Nessuna voce di questo file autorizza modifiche dirette a `main`: ogni intervento resta soggetto a branch, pull request e CI verde.
+---
+
+## 3. Chiuse
+
+Registrate qui perché una voce chiusa senza traccia torna a essere riaperta da qualcuno che non
+c'era.
+
+| Voce | Chiusa da |
+|---|---|
+| Privilegi delle funzioni e preview link | `pr_0_contract_test.sql` rifiuta un token in chiaro (SQLSTATE 23514); `private_function_grants_test.sql` copre §6.8 alla lettera |
+| RLS globale resistente alle nuove tabelle | test globale RLS + FORCE in `pr_0_contract_test.sql`, esteso dalle PR sui grant |
+| Superfici pubbliche minime | #11 — otto proiezioni, consenso come filtro, 97 asserzioni con enumerazione esatta delle colonne |
+| `service_role` non può inserire una traccia embed | #15 — tre `grant execute` sui validatori che i CHECK valutano. Il difetto era più largo del sospetto: erano rotti anche link, date, press e il salvataggio della configurazione da parte dell'owner |
+| I media non arrivano ad `anon` | #18 — route `/api/media/`, redirect 302 verso URL firmato, bucket privati, TTL differenziato per immagini e tracce |
+| I componenti EPK non sono collegati alla route EPK | #17 — più la separazione fra forma di render e forma di riga, che rende impossibile per tipo passare una riga di tabella al componente senza attraversare il filtro del consenso |
+| `SiteReader` e il client di B non sono saldati | #16 — adattatore in `lib/site-reader/`, registrazione in `instrumentation.ts` |
+| Lifecycle prenotazioni e quote | copertura di release, scadenza e downgrade fra la migrazione del billing e quella del wizard |
+| Le due RPC di `public` erano invocabili senza login | #19 — verificato sul database reale dopo il deploy della migrazione |
+| Nove relazioni con privilegi pieni per `anon` | #20 — `TRUNCATE` su `billing_events` era davvero eseguibile da `anon`, e RLS non lo intercetta. Verificato chiuso rileggendo `pg_class.relacl` sul progetto vero |
+
+---
+
+> Nessuna voce di questo file autorizza modifiche dirette a `main`: ogni intervento resta soggetto a
+> branch, pull request e CI verde.
