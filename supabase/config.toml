@@ -115,7 +115,13 @@ port = 54324
 [storage]
 enabled = true
 # The maximum file size allowed (e.g. "5MB", "500KB").
-file_size_limit = "50MiB"
+# Deve restare >= al piu grande `file_size_limit` dichiarato dai bucket in
+# `20260815190000_media_storage_buckets.sql`: oggi `site-tracks` = 268435456
+# byte (256 MiB). Questo limite globale vince su quello del bucket, quindi un
+# valore piu basso rifiuta le tracce grandi senza che nessun test lo spieghi.
+# Vale per lo stack locale e per la CI; il limite del progetto ospitato si
+# configura a parte dalla dashboard.
+file_size_limit = "256MiB"
 
 # Uncomment to configure local storage buckets
 # [storage.buckets.images]
