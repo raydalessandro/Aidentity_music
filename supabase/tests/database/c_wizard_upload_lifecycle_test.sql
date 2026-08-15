@@ -193,8 +193,14 @@ select 'expired', public.wizard_reserve_upload(
   '44444444-4444-4444-4444-444444444444',
   'track_upload', 4096, 0, 1
 );
+-- La prenotazione va portata nel passato per simulare la scadenza, ma il contratto
+-- PR-0 impone `check(expires_at > created_at)` (site_upload_reservations_check1).
+-- Spostare il solo `expires_at` indietro violava il vincolo e interrompeva il file.
+-- Si arretrano entrambi i campi: la riga resta ammessa dal contratto ed e' scaduta
+-- rispetto a now(), che e' l'unica cosa che questa sezione deve misurare.
 update public.site_upload_reservations
-set expires_at = now() - interval '1 second'
+set created_at = now() - interval '31 minutes',
+    expires_at = now() - interval '1 second'
 where id=(select id from c_reservations where kind='expired');
 
 select is(
