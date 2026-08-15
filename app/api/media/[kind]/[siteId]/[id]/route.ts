@@ -1,5 +1,10 @@
 // Route media: l'unico modo in cui un file dello Storage raggiunge un visitatore.
 //
+// Risponde 302 verso un URL firmato a scadenza breve, dopo aver verificato pubblicazione,
+// tenant e purga. I byte li serve lo Storage, con la sua CDN e con `Range`: è la decisione
+// di Ray, motivata per esteso in `lib/media/handle.ts` insieme all'eccezione a §6.3 che
+// comporta.
+//
 // ── Perché sta qui, e non altrove ────────────────────────────────────────────────────────
 //
 // Sotto `app/api/**` perché è una route server con `service_role`, e `app/[slug]/**` non
@@ -29,7 +34,6 @@ import type { MediaDeps, MediaLogger } from "@/lib/media/ports";
 import {
   bridgeSupabaseMediaClient,
   bridgeSupabaseStorage,
-  createFetchMediaObjectFetcher,
   createSupabaseMediaSigner,
   createSupabaseMediaSource,
 } from "@/lib/media/supabase-media";
@@ -48,7 +52,6 @@ function deps(): MediaDeps {
   return {
     source: createSupabaseMediaSource(() => bridgeSupabaseMediaClient(client)),
     signer: createSupabaseMediaSigner(() => bridgeSupabaseStorage(client)),
-    fetcher: createFetchMediaObjectFetcher((url) => fetch(url)),
   };
 }
 
@@ -67,9 +70,6 @@ export async function GET(
     return NextResponse.json(result.body, { status: result.status, headers: result.headers });
   }
 
-  // `Response` e non `NextResponse.json`: il corpo sono byte, non JSON.
-  return new Response(new Uint8Array(result.bytes), {
-    status: result.status,
-    headers: result.headers,
-  });
+  // 302 verso lo Storage. Corpo vuoto: il contenuto non passa da qui, e non deve.
+  return new Response(null, { status: result.status, headers: result.headers });
 }

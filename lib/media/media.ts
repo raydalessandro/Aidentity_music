@@ -29,11 +29,21 @@ export const MEDIA_TABLE: Readonly<Record<MediaKind, string>> = {
 };
 
 /**
- * Vita della firma. Sessanta secondi bastano al server per leggere i byte e non bastano a
- * nessun altro: l'URL firmato non lascia mai il processo, quindi la finestra è il tempo di
- * una richiesta, non il tempo in cui un link resta valido in mano a un visitatore.
+ * Vita della firma, per `kind`. Ora che la route reindirizza, questa è la finestra in cui
+ * un URL copiato dalla barra di rete resta valido: va scelta, non ereditata.
+ *
+ * `asset`: 60 secondi. Un'immagine si scarica in una richiesta sola; oltre non serve.
+ *
+ * `track`: 900 secondi. Un player audio non fa una richiesta sola — ogni seek ne apre una
+ * nuova con `Range` sullo **stesso** URL. Con 60 secondi il primo seek dopo un minuto
+ * riceverebbe un 400, cioè esattamente il player rotto che il redirect esiste per evitare.
+ * Quindici minuti coprono l'ascolto di un brano; restano una frazione della finestra
+ * infinita di un bucket pubblico, che è l'alternativa scartata.
  */
-export const MEDIA_SIGNATURE_TTL_SECONDS = 60;
+export const MEDIA_SIGNATURE_TTL_SECONDS: Readonly<Record<MediaKind, number>> = {
+  asset: 60,
+  track: 900,
+};
 
 /**
  * Allowlist dei tipi che questa route accetta di restituire, per `kind`.

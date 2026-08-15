@@ -11,7 +11,6 @@ import { MEDIA_FIXTURE_IDS, MEDIA_FIXTURE_PATHS } from "./fixtures";
 import {
   MediaSignatureError,
   MediaSourceError,
-  createFetchMediaObjectFetcher,
   createSupabaseMediaSigner,
   createSupabaseMediaSource,
   type MediaQueryClientLike,
@@ -180,30 +179,5 @@ describe("firma", () => {
       .catch((error: unknown) => {
         expect(String(error)).not.toContain(MEDIA_FIXTURE_PATHS.publishedAsset);
       });
-  });
-});
-
-describe("lettura dei byte", () => {
-  it("restituisce i byte e il tipo dichiarato dallo Storage", async () => {
-    const bytes = new Uint8Array([1, 2, 3]);
-    const fetcher = createFetchMediaObjectFetcher(async () => ({
-      ok: true,
-      headers: { get: () => "image/jpeg" },
-      arrayBuffer: async () => bytes.buffer as ArrayBuffer,
-    }));
-
-    const object = await fetcher.fetchObject("https://storage.test/firma");
-    expect(object?.bytes).toEqual(bytes);
-    expect(object?.contentType).toBe("image/jpeg");
-  });
-
-  it("una risposta non ok è «nessun oggetto», non un oggetto vuoto", async () => {
-    const fetcher = createFetchMediaObjectFetcher(async () => ({
-      ok: false,
-      headers: { get: () => null },
-      arrayBuffer: async () => new ArrayBuffer(0),
-    }));
-
-    expect(await fetcher.fetchObject("https://storage.test/firma")).toBeNull();
   });
 });

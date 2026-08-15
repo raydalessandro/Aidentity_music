@@ -16,7 +16,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import { MEDIA_TABLE, type MediaKind, type MediaRow } from "./media";
-import type { MediaObject, MediaObjectFetcher, MediaUrlSigner, PrivilegedMediaSource } from "./ports";
+import type { MediaUrlSigner, PrivilegedMediaSource } from "./ports";
 
 // ---------------------------------------------------------------- lettura privilegiata
 
@@ -161,27 +161,6 @@ export function createSupabaseMediaSigner(storage: () => StorageSignerLike): Med
   };
 }
 
-// ---------------------------------------------------------------- byte
-
-export type FetchLike = (url: string) => Promise<{
-  readonly ok: boolean;
-  readonly headers: { get(name: string): string | null };
-  arrayBuffer(): Promise<ArrayBuffer>;
-}>;
-
-/**
- * Legge i byte dall'URL firmato. L'URL entra, i byte escono: non viene registrato, non
- * viene restituito e non finisce in nessun messaggio d'errore, perché contiene il path.
- */
-export function createFetchMediaObjectFetcher(fetchImpl: FetchLike): MediaObjectFetcher {
-  return {
-    async fetchObject(signedUrl: string): Promise<MediaObject | null> {
-      const response = await fetchImpl(signedUrl);
-      if (!response.ok) return null;
-      return {
-        bytes: new Uint8Array(await response.arrayBuffer()),
-        contentType: response.headers.get("content-type"),
-      };
-    },
-  };
-}
+// I byte non passano più da qui: la route reindirizza e lo Storage li serve direttamente,
+// con la propria CDN e con `Range`. Un `fetch` lato server esisteva quando la route faceva
+// da proxy; toglierlo è ciò che restituisce il seek al player.

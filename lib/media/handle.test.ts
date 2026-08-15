@@ -17,10 +17,9 @@ import {
   type MediaHttpResponse,
 } from "./handle";
 import {
-  FIXTURE_BYTES,
+  FIXTURE_SIGN_PREFIX,
   MEDIA_FIXTURE_IDS,
   MEDIA_FIXTURE_PATHS,
-  createFixtureFetcher,
   createFixtureMediaSource,
   createFixtureSigner,
 } from "./fixtures";
@@ -33,7 +32,6 @@ function deps(overrides: Partial<MediaDeps> = {}): MediaDeps {
   return {
     source: createFixtureMediaSource(),
     signer: createFixtureSigner(),
-    fetcher: createFixtureFetcher(),
     ...overrides,
   };
 }
@@ -49,44 +47,87 @@ async function get(
 // ---------------------------------------------------------------- caso positivo
 
 describe("un asset pubblicato arriva al visitatore", () => {
-  it("200, byte del file, tipo dichiarato dall'allowlist", async () => {
+  it("302 verso lo Storage, senza corpo", async () => {
     const response = await get({
       kind: "asset",
       siteId: IDS.publishedSite,
       id: IDS.publishedAsset,
     });
 
-    expect(response.kind).toBe("bytes");
-    if (response.kind !== "bytes") return;
-    expect(response.status).toBe(200);
-    expect(response.bytes).toEqual(FIXTURE_BYTES);
-    expect(response.headers["content-type"]).toBe("image/jpeg");
-    expect(response.headers["content-length"]).toBe(String(FIXTURE_BYTES.byteLength));
-    expect(response.headers["x-content-type-options"]).toBe("nosniff");
-    // Cache privata: una cache condivisa continuerebbe a servire dopo una depubblicazione.
-    expect(response.headers["cache-control"]).toBe("private, max-age=60");
+    expect(response.kind).toBe("redirect");
+    if (response.kind !== "redirect") return;
+    expect(response.status).toBe(302);
+    expect(response.headers["content-length"]).toBe("0");
+    // Il redirect non si mette in cache: e' il punto in cui si verifica la pubblicazione, e
+    // una copia in cache risponderebbe anche dopo una depubblicazione.
+    expect(response.headers["cache-control"]).toBe("no-store");
   });
 
-  it("una traccia upload pubblicata arriva allo stesso modo, con il tipo audio", async () => {
+  it("una traccia upload pubblicata ottiene lo stesso redirect, dal bucket delle tracce", async () => {
+    const signer = createFixtureSigner();
+    const response = await get(
+      { kind: "track", siteId: IDS.publishedSite, id: IDS.publishedTrack },
+      { signer },
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.location).toContain(`${FIXTURE_SIGN_PREFIX}site-tracks/`);
+  });
+
+  /**
+   * DoD 3, riscritto per la forma decisa da Ray: il bersaglio del redirect deve essere una
+   * firma, non un URL pubblico. Un firmatario che producesse `.../object/public/<bucket>/...`
+   * rende rosso questo test, che e' il modo in cui ci si accorgerebbe di un bucket
+   * diventato pubblico o di una firma sostituita da un link permanente.
+   */
+  it("il bersaglio e' un URL firmato, non un URL pubblico", async () => {
     const response = await get({
-      kind: "track",
+      kind: "asset",
       siteId: IDS.publishedSite,
-      id: IDS.publishedTrack,
+      id: IDS.publishedAsset,
     });
 
-    expect(response.kind).toBe("bytes");
-    if (response.kind !== "bytes") return;
-    expect(response.status).toBe(200);
-    expect(response.headers["content-type"]).toBe("audio/mpeg");
+    const location = response.headers.location ?? "";
+    expect(location).toContain(FIXTURE_SIGN_PREFIX);
+    expect(location).toContain("token=");
+    expect(location).not.toContain("/object/public/");
+    expect(location.startsWith("https://")).toBe(true);
   });
 
-  it("la firma chiesta ha vita breve e riguarda il bucket giusto", async () => {
+  /**
+   * La scadenza e' breve e dichiarata per `kind`. L'asset si scarica in una richiesta;
+   * la traccia no: ogni seek riapre una richiesta `Range` sullo stesso URL, e una firma da
+   * sessanta secondi renderebbe il seek un errore dopo un minuto di ascolto.
+   */
+  it("la firma ha una scadenza breve, piu' lunga per l'audio che per le immagini", async () => {
+    const perAsset = createFixtureSigner();
+    await get(
+      { kind: "asset", siteId: IDS.publishedSite, id: IDS.publishedAsset },
+      { signer: perAsset },
+    );
+    expect(perAsset.ttls).toEqual([MEDIA_SIGNATURE_TTL_SECONDS.asset]);
+    expect(MEDIA_SIGNATURE_TTL_SECONDS.asset).toBe(60);
+
+    const perTrack = createFixtureSigner();
+    await get(
+      { kind: "track", siteId: IDS.publishedSite, id: IDS.publishedTrack },
+      { signer: perTrack },
+    );
+    expect(perTrack.ttls).toEqual([MEDIA_SIGNATURE_TTL_SECONDS.track]);
+    expect(MEDIA_SIGNATURE_TTL_SECONDS.track).toBe(900);
+
+    // «Breve» ha un limite superiore dichiarato: un quarto d'ora, non un giorno.
+    for (const ttl of Object.values(MEDIA_SIGNATURE_TTL_SECONDS)) {
+      expect(ttl).toBeGreaterThan(0);
+      expect(ttl).toBeLessThanOrEqual(900);
+    }
+  });
+
+  it("firma il bucket che corrisponde al kind, mai l'altro", async () => {
     const signer = createFixtureSigner();
     await get({ kind: "asset", siteId: IDS.publishedSite, id: IDS.publishedAsset }, { signer });
-
-    expect(signer.ttls).toEqual([MEDIA_SIGNATURE_TTL_SECONDS]);
-    expect(MEDIA_SIGNATURE_TTL_SECONDS).toBeLessThanOrEqual(60);
-    expect(signer.issued[0]).toContain("/object/sign/site-assets/");
+    expect(signer.issued[0]).toContain(`${FIXTURE_SIGN_PREFIX}site-assets/`);
+    expect(signer.issued[0]).not.toContain("site-tracks");
   });
 });
 
@@ -157,16 +198,25 @@ describe("ciò che non è pubblico non è ottenibile", () => {
     });
   });
 
-  it("nessun diniego firma o scarica alcunché: si ferma prima dello Storage", async () => {
+  /**
+   * DoD 3, seconda metà: un accesso negato non produce redirect. Non «un redirect verso
+   * altro»: nessuna firma viene chiesta, quindi lo Storage non viene nemmeno interpellato e
+   * non esiste alcun `Location` da leggere.
+   */
+  it("nessun diniego firma alcunché e nessuno produce un Location", async () => {
     const signer = createFixtureSigner();
-    const fetcher = createFixtureFetcher();
 
-    for (const { target } of casi) {
-      await get(target, { signer, fetcher });
+    for (const { caso, target } of casi) {
+      const response = await get(target, { signer });
+      expect(response.kind, caso).toBe("json");
+      expect(response.headers.location, caso).toBeUndefined();
+      expect(Object.keys(response.headers).map((name) => name.toLowerCase()), caso).not.toContain(
+        "location",
+      );
     }
 
     expect(signer.issued).toEqual([]);
-    expect(fetcher.requested).toEqual([]);
+    expect(signer.ttls).toEqual([]);
   });
 
   it("la tabella dei dinieghi copre ogni motivo e non distingue nessuno", () => {
@@ -204,16 +254,18 @@ describe("ciò che non è pubblico non è ottenibile", () => {
 // ---------------------------------------------------------------- il path non esce mai
 
 /**
- * DoD 3. Il test è red-able per costruzione: il firmatario della fixture produce un URL
- * nella forma vera di Supabase Storage, che **contiene** il path
- * (`…/object/sign/site-assets/seed/nvll-click-hero.jpg?token=…`). Se la route restituisse
- * quell'URL invece dei byte — in un campo, in un header `Location`, ovunque — questo test
- * cadrebbe subito.
+ * DoD 3, nella forma decisa da Ray.
+ *
+ * Il path ORA compare, per costruzione, nell'header `Location`: un URL firmato di Supabase
+ * Storage lo contiene, e Ray ha scelto di esporlo per tenere `Range` e il seek. Constatarlo
+ * non sarebbe un test. Ciò che resta da difendere, e che qui si difende, è il perimetro
+ * dell'eccezione: il path non entra nel **corpo** di nessuna risposta, non entra nei log, e
+ * non esce affatto quando l'accesso è negato.
  */
-describe("storage_path non compare mai nella risposta", () => {
+describe("il perimetro dell'eccezione a §6.3", () => {
   const paths = Object.values(MEDIA_FIXTURE_PATHS);
 
-  it("né nel corpo né in un header, sul caso positivo", async () => {
+  it("il corpo della risposta positiva è vuoto: il path sta solo nel Location", async () => {
     const signer = createFixtureSigner();
     const response = await get(
       { kind: "asset", siteId: IDS.publishedSite, id: IDS.publishedAsset },
@@ -224,21 +276,23 @@ describe("storage_path non compare mai nella risposta", () => {
     expect(signer.issued).toHaveLength(1);
     expect(signer.issued[0]).toContain(MEDIA_FIXTURE_PATHS.publishedAsset);
 
-    const serialized = JSON.stringify(response);
-    for (const path of paths) expect(serialized).not.toContain(path);
-    for (const path of paths) {
-      for (const value of Object.values(response.headers)) expect(value).not.toContain(path);
+    expect(response.kind).toBe("redirect");
+    if (response.kind !== "redirect") return;
+    // `redirect` non ha proprio un campo corpo, e la risposta HTTP dichiara zero byte.
+    expect("body" in response).toBe(false);
+    expect(response.headers["content-length"]).toBe("0");
+
+    // L'unico header che porta il path è `Location`. Nessun altro, e nessun nome di header.
+    const senzaLocation = Object.entries(response.headers).filter(([name]) => name !== "location");
+    for (const [name, value] of senzaLocation) {
+      for (const path of paths) expect(value, name).not.toContain(path);
     }
     for (const name of Object.keys(response.headers)) {
       expect(name.toLowerCase()).not.toContain("path");
-      expect(name.toLowerCase()).not.toContain("location");
     }
-    // Nemmeno l'URL firmato, che del path è il veicolo.
-    expect(serialized).not.toContain("object/sign");
-    expect(serialized).not.toContain("token=");
   });
 
-  it("nessun campo della risposta si chiama storage_path, in nessuno dei casi", async () => {
+  it("nessuna risposta nomina il campo storage_path, in nessuno dei casi", async () => {
     const targets = [
       { kind: "asset", siteId: IDS.publishedSite, id: IDS.publishedAsset },
       { kind: "track", siteId: IDS.publishedSite, id: IDS.publishedTrack },
@@ -250,6 +304,31 @@ describe("storage_path non compare mai nella risposta", () => {
       const serialized = JSON.stringify(await get(target));
       expect(serialized).not.toContain("storage_path");
       expect(serialized).not.toContain("storagePath");
+    }
+  });
+
+  /**
+   * Un accesso negato non espone il path in nessuna forma: nel `Location` il path ha una
+   * scadenza addosso e un controllo davanti, in una risposta negata non avrebbe né l'una né
+   * l'altro. Questo test copre i dieci dinieghi uno per uno.
+   */
+  it("nessun diniego lascia trapelare un path, in nessun header e in nessun corpo", async () => {
+    const targets = [
+      { kind: "asset", siteId: IDS.draftSite, id: IDS.draftAsset },
+      { kind: "asset", siteId: IDS.reviewSite, id: IDS.reviewAsset },
+      { kind: "asset", siteId: IDS.publishedSite, id: IDS.draftAsset },
+      { kind: "asset", siteId: IDS.publishedSite, id: IDS.purgedAsset },
+      { kind: "track", siteId: IDS.publishedSite, id: IDS.purgedTrack },
+      { kind: "track", siteId: IDS.publishedSite, id: IDS.embedTrack },
+      { kind: "asset", siteId: IDS.publishedSite, id: IDS.svgAsset },
+      { kind: "asset", siteId: IDS.publishedSite, id: IDS.absent },
+    ];
+
+    for (const target of targets) {
+      const serialized = JSON.stringify(await get(target));
+      for (const path of paths) expect(serialized, target.id).not.toContain(path);
+      expect(serialized).not.toContain("object/sign");
+      expect(serialized).not.toContain("token=");
     }
   });
 
@@ -322,7 +401,7 @@ describe("input malformato", () => {
       siteId: IDS.publishedSite,
       id: IDS.publishedAsset,
     });
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(302);
   });
 });
 
@@ -370,14 +449,20 @@ describe("un guasto non si traveste da diniego", () => {
     expect(response.status).toBe(502);
   });
 
-  it("oggetto non scaricabile → 502", async () => {
-    const response = await get(
-      { kind: "asset", siteId: IDS.publishedSite, id: IDS.publishedAsset },
-      { fetcher: createFixtureFetcher({ object: null }) },
-    );
+  it("un guasto della firma non produce comunque un redirect", async () => {
+    for (const signer of [
+      createFixtureSigner({ signedUrl: null }),
+      createFixtureSigner({ failWith: new Error("bucket assente") }),
+    ]) {
+      const response = await get(
+        { kind: "asset", siteId: IDS.publishedSite, id: IDS.publishedAsset },
+        { signer },
+      );
 
-    expect(response.status).toBe(502);
-    expect(response).toEqual(expect.objectContaining({ body: MEDIA_UNRECOVERABLE_BODY }));
+      expect(response.kind).toBe("json");
+      expect(response.headers.location).toBeUndefined();
+      expect(response).toEqual(expect.objectContaining({ body: MEDIA_UNRECOVERABLE_BODY }));
+    }
   });
 
   it("il messaggio d'errore non nomina mai il motivo del diniego", async () => {

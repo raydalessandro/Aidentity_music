@@ -12,12 +12,7 @@
 // rossa immediatamente.
 
 import type { MediaKind, MediaRow, PublicationStatus } from "./media";
-import type {
-  MediaObject,
-  MediaObjectFetcher,
-  MediaUrlSigner,
-  PrivilegedMediaSource,
-} from "./ports";
+import type { MediaUrlSigner, PrivilegedMediaSource } from "./ports";
 
 export const MEDIA_FIXTURE_IDS = {
   /** Sito pubblicato del seed. */
@@ -152,11 +147,12 @@ export function createFixtureMediaSource(
 }
 
 /**
- * Firmatario che riproduce la forma vera di Supabase Storage, path incluso.
+ * Firmatario che riproduce la forma vera di Supabase Storage, path e token inclusi.
  *
- * È il punto della fixture: l'URL firmato **contiene** `storage_path`. Un test che
- * verifichi l'assenza del path nella risposta può quindi diventare rosso davvero — se la
- * route restituisse l'URL invece dei byte, il path comparirebbe e il test cadrebbe.
+ * La forma conta: i test sul redirect verificano che il bersaglio sia una firma con
+ * scadenza — `/object/sign/<bucket>/<path>?token=…` — e non un URL pubblico. Un firmatario
+ * che restituisse `…/object/public/<bucket>/<path>` li renderebbe rossi, che è il modo in
+ * cui si accorgerebbero di un bucket diventato pubblico.
  */
 export function createFixtureSigner(
   options: { readonly signedUrl?: string | null; readonly failWith?: Error } = {},
@@ -173,26 +169,12 @@ export function createFixtureSigner(
         if (options.signedUrl !== null) issued.push(options.signedUrl);
         return options.signedUrl;
       }
-      const url = `https://storage.aidentity.test/storage/v1/object/sign/${bucket}/${path}?token=firma-di-prova`;
+      const url = `https://storage.aidentity.test${FIXTURE_SIGN_PREFIX}${bucket}/${path}?token=firma-di-prova`;
       issued.push(url);
       return url;
     },
   };
 }
 
-export const FIXTURE_BYTES = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
-
-export function createFixtureFetcher(
-  options: { readonly object?: MediaObject | null; readonly failWith?: Error } = {},
-): MediaObjectFetcher & { readonly requested: string[] } {
-  const requested: string[] = [];
-  return {
-    requested,
-    async fetchObject(signedUrl: string): Promise<MediaObject | null> {
-      requested.push(signedUrl);
-      if (options.failWith) throw options.failWith;
-      if (options.object !== undefined) return options.object;
-      return { bytes: FIXTURE_BYTES, contentType: "application/octet-stream" };
-    },
-  };
-}
+/** Prefisso della forma firmata. Un URL che non lo contiene non è una firma. */
+export const FIXTURE_SIGN_PREFIX = "/storage/v1/object/sign/";

@@ -1,33 +1,36 @@
 // Il corpo della route media, senza Next dentro.
 //
 // `app/api/media/[kind]/[siteId]/[id]/route.ts` è un guscio: legge i segmenti, costruisce le
-// dipendenze reali e converte il risultato in `NextResponse`. Tutto ciò che decide sta qui,
-// e sta qui perché sia eseguibile in vitest: `lib/supabase/service-role.ts` apre con
+// dipendenze reali e converte il risultato in una risposta. Tutto ciò che decide sta qui, e
+// sta qui perché sia eseguibile in vitest: `lib/supabase/service-role.ts` apre con
 // `import "server-only"`, che è un alias risolto soltanto dentro il build di Next, quindi un
 // test che importasse la route non riuscirebbe nemmeno a caricarla (stesso motivo per cui
 // `lib/site-reader/postgrest-row-source.ts` riceve il client come parametro).
 //
-// ── Perché la risposta sono i byte e non l'URL firmato ───────────────────────────────────
+// ── La risposta è un redirect 302 verso l'URL firmato ────────────────────────────────────
 //
-// La consegna chiedeva «restituire un URL firmato a scadenza breve» e, nella stessa pagina,
-// «il path non deve mai comparire nella risposta, in nessuna forma» più un test che lo
-// verifichi «in nessun campo e in nessun header». Le due cose non possono valere insieme:
-// un URL firmato di Supabase Storage è
+// Decisione di Ray. Il redirect è la sola forma che fa funzionare `<img src>` e l'elemento
+// audio, e soprattutto è la sola che lascia i byte allo Storage: da lì arrivano con la CDN
+// e con il supporto a `Range`, cioè con il seek. Un proxy di byte dal server toglieva
+// entrambe le cose, e su un prodotto musicale un player che per spostarsi dentro un brano
+// deve riscaricarlo non è un player.
+//
+// ── L'eccezione a §6.3, dichiarata ───────────────────────────────────────────────────────
+//
+// Un URL firmato di Supabase Storage è
 //
 //     https://<progetto>/storage/v1/object/sign/<bucket>/<storage_path>?token=<jwt>
 //
-// cioè **contiene `storage_path` alla lettera**. Restituirlo — in un campo JSON o in un
-// header `Location` — pubblicherebbe esattamente il campo che §6.3 tiene fra quelli interni
-// («path privati non entrano nelle proiezioni»).
+// e contiene quindi `storage_path` alla lettera. Metterlo nell'header `Location` **espone il
+// path**, che §6.3 elenca fra i campi interni. È un'eccezione voluta, non una svista: il
+// path è un nome di file dentro un bucket privato, raggiungibile solo con una firma che
+// scade, e nasconderlo proteggerebbe poco al prezzo del seek. Ciò che l'eccezione **non**
+// concede: il path non entra nel corpo di nessuna risposta, non entra nei log, e non compare
+// mai su una richiesta negata — un diniego non produce `Location` affatto.
 //
-// Quindi: il meccanismo richiesto resta identico — path risolto con privilegi elevati lato
-// server, `createSignedUrl` con TTL di 60 secondi — ma la firma non lascia il processo. La
-// route la consuma e restituisce i byte. Il chiamante riceve un'immagine o un audio, mai un
-// percorso. È l'unica forma in cui la voce 3 del DoD è letteralmente vera e verificabile.
-//
-// Costo dichiarato: i byte passano dal server invece che dal CDN dello Storage, e le
-// richieste `Range` non sono supportate in v1 (il player scarica la traccia intera; la
-// riproduzione funziona, il seek è degradato). Nessuno dei due è un problema di sicurezza.
+// Costo dichiarato: il redirect non è memorizzabile in cache (`no-store`), quindi ogni
+// immagine costa un giro sulla route più uno sullo Storage. È il prezzo della revoca: se il
+// redirect fosse in cache, una depubblicazione non avrebbe effetto fino alla scadenza.
 
 import { decideMediaAccess, type MediaDenial } from "./access";
 import { MEDIA_SIGNATURE_TTL_SECONDS } from "./media";
@@ -53,10 +56,9 @@ const ERROR_HEADERS: Readonly<Record<string, string>> = {
 
 export type MediaHttpResponse =
   | {
-      readonly kind: "bytes";
-      readonly status: 200;
+      readonly kind: "redirect";
+      readonly status: 302;
       readonly headers: Readonly<Record<string, string>>;
-      readonly bytes: Uint8Array;
     }
   | {
       readonly kind: "json";
@@ -65,10 +67,7 @@ export type MediaHttpResponse =
       readonly body: { readonly error: string };
     };
 
-function json(
-  status: 400 | 404 | 500 | 502,
-  body: { readonly error: string },
-): MediaHttpResponse {
+function json(status: 400 | 404 | 500 | 502, body: { readonly error: string }): MediaHttpResponse {
   return { kind: "json", status, headers: ERROR_HEADERS, body };
 }
 
@@ -122,7 +121,7 @@ export async function handleMediaRequest(
     return json(500, MEDIA_UNCONFIGURED_BODY);
   }
 
-  const ttl = resolved.ttlSeconds ?? MEDIA_SIGNATURE_TTL_SECONDS;
+  const ttl = resolved.ttlSeconds ?? MEDIA_SIGNATURE_TTL_SECONDS[kind];
 
   let row;
   try {
@@ -132,11 +131,11 @@ export async function handleMediaRequest(
     return json(500, MEDIA_UNREADABLE_BODY);
   }
 
+  // Ogni controllo di accesso sta PRIMA della firma: un diniego non arriva mai allo
+  // Storage, non produce nessuna firma e non produce nessun `Location`.
   const access = decideMediaAccess(kind, siteId, row);
   if (!access.ok) return denialResponse(access.reason);
 
-  // Da qui in poi il path esiste come variabile locale e non compare più: non entra nei
-  // log, non entra negli header, non entra nel corpo.
   let signedUrl: string | null;
   try {
     signedUrl = await resolved.signer.sign(access.bucket, access.path, ttl);
@@ -149,33 +148,18 @@ export async function handleMediaRequest(
     return json(502, MEDIA_UNRECOVERABLE_BODY);
   }
 
-  let object;
-  try {
-    object = await resolved.fetcher.fetchObject(signedUrl);
-  } catch (error) {
-    report(log, { stage: "fetch", kind, id, detail: detailOf(error) });
-    return json(502, MEDIA_UNRECOVERABLE_BODY);
-  }
-  if (object === null) {
-    report(log, { stage: "fetch", kind, id, detail: "oggetto non leggibile" });
-    return json(502, MEDIA_UNRECOVERABLE_BODY);
-  }
-
   return {
-    kind: "bytes",
-    status: 200,
+    kind: "redirect",
+    status: 302,
     headers: {
-      // Il tipo viene dall'allowlist di `decideMediaAccess`, non dallo Storage e non dalla
-      // riga grezza: un `mime_type` arbitrario finito in tabella non diventa un header.
-      "content-type": access.contentType,
-      "content-length": String(object.bytes.byteLength),
-      // Il tipo è già dichiarato dall'allowlist: il browser non deve indovinarne un altro.
-      "x-content-type-options": "nosniff",
-      // Cache privata e breve. Non `public`: una cache condivisa continuerebbe a servire
-      // l'asset dopo una depubblicazione o una purga, e la revoca deve avere effetto.
-      "cache-control": "private, max-age=60",
+      location: signedUrl,
+      // Il redirect non si mette in cache: è il punto in cui `published`, tenant e purga
+      // vengono verificati, e una copia in cache continuerebbe a rispondere dopo una
+      // depubblicazione. I byte, invece, li mette in cache lo Storage.
+      "cache-control": "no-store",
+      // Nessun corpo: il contenuto è allo Storage, e qui non deve esserci niente da leggere.
+      "content-length": "0",
     },
-    bytes: object.bytes,
   };
 }
 
