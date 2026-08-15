@@ -26,13 +26,25 @@ import { expect, test } from "@playwright/test";
  */
 
 /**
- * Seriale, contro il `fullyParallel: true` del progetto.
+ * Seriale, contro il `fullyParallel: true` del progetto — e con un ordine deliberato.
  *
- * `beforeAll` e `afterAll` girano una volta **per worker**: con i test di questo file
- * spalmati su più worker, il teardown di uno cancellerebbe righe e oggetti mentre un altro
- * li sta ancora leggendo. Il fixture qui è stato condiviso e mutabile, quindi il file resta
- * in un worker solo. È anche il motivo per cui il setup è idempotente (`upsert`): un
- * ritentativo non deve trovare macerie.
+ * La serialità serve al teardown: `beforeAll` e `afterAll` girano una volta **per worker**,
+ * e con i test spalmati su più worker il teardown di uno cancellerebbe righe e oggetti
+ * mentre un altro li sta ancora leggendo. Il fixture è condiviso e mutabile, quindi il file
+ * resta in un worker solo, e il setup è idempotente (`upsert`) perché un ritentativo non
+ * deve trovare macerie.
+ *
+ * Il prezzo l'abbiamo pagato al primo run: un fallimento in cima ha nascosto tredici test.
+ * Quindi l'ordine dei blocchi non è casuale, dal più solido al più fragile:
+ *
+ *   1. una sentinella che verifica che la route sia *configurata*, e che fallisce dicendo
+ *      esattamente cosa ha risposto il server invece di far indovinare un 500;
+ *   2. i dinieghi — il nucleo di sicurezza, quello che deve essere visto per primo;
+ *   3. il caso concesso: 302, firma, byte;
+ *   4. `Range`, che dipende dal comportamento dello Storage;
+ *   5. le pagine, che dipendono anche dal renderer e dall'idratazione.
+ *
+ * Se cade la coda, il nucleo ha già parlato.
  */
 test.describe.configure({ mode: "serial" });
 
@@ -124,55 +136,45 @@ function urlMedia(kind: "asset" | "track", siteId: string, id: string): string {
   return `/api/media/${kind}/${siteId}/${id}`;
 }
 
-// ---------------------------------------------------------------- caso positivo
+// ---------------------------------------------------------------- sentinella
 
-test("l'asset di un sito pubblicato risponde 302 verso un URL firmato", async ({ request }) => {
+/**
+ * Descrizione leggibile di una risposta, da mettere nel messaggio di fallimento.
+ *
+ * Nasce da un rosso concreto: `expect(status).toBe(302)` che riceve 500 non dice niente, e
+ * il corpo della route invece lo dice — `media non configurato` significa che il server
+ * Next non ha una configurazione Supabase valida, `media non leggibile` che la query è
+ * fallita, `media non recuperabile` che è stato lo Storage. Sono tre diagnosi diverse, e
+ * senza il corpo costano tutte un giro di CI.
+ */
+async function descrivi(risposta: {
+  status: () => number;
+  text: () => Promise<string>;
+  headers: () => Record<string, string>;
+}): Promise<string> {
+  const corpo = (await risposta.text()).slice(0, 300);
+  const location = risposta.headers()["location"];
+  return [
+    `status ${risposta.status()}`,
+    `corpo ${corpo === "" ? "(vuoto)" : corpo}`,
+    location === undefined ? "nessun Location" : "con Location",
+  ].join(" · ");
+}
+
+test("la route media è configurata: non risponde «media non configurato»", async ({ request }) => {
   const risposta = await request.get(urlMedia("asset", SITO_PUBBLICATO, ASSET_HERO), {
     maxRedirects: 0,
   });
+  const dettaglio = await descrivi(risposta);
 
-  expect(risposta.status()).toBe(302);
-
-  const location = risposta.headers()["location"] ?? "";
-  expect(location, "il bersaglio deve essere una firma, non un URL pubblico").toContain(
-    "/storage/v1/object/sign/site-assets/",
-  );
-  expect(location).toContain("token=");
-  expect(location).not.toContain("/object/public/");
-
-  // Il redirect non si mette in cache: è il punto in cui si verifica la pubblicazione.
-  expect(risposta.headers()["cache-control"]).toBe("no-store");
-  // Il corpo è vuoto: il path sta nel `Location` e da nessun'altra parte.
-  expect(await risposta.body()).toHaveLength(0);
-});
-
-test("seguendo il redirect arrivano i byte del file, dallo Storage", async ({ request }) => {
-  const risposta = await request.get(urlMedia("asset", SITO_PUBBLICATO, ASSET_HERO));
-
-  expect(risposta.status()).toBe(200);
-  expect(risposta.headers()["content-type"]).toContain("image/jpeg");
-  expect(Buffer.from(await risposta.body()).equals(BYTES)).toBe(true);
-});
-
-/**
- * La ragione per cui Ray ha scelto il redirect: senza `Range`, spostarsi dentro un
- * brano significa riscaricarlo. Qui si misura che lo Storage risponda davvero 206
- * sull'URL firmato che la route consegna.
- */
-test("la traccia risponde a una richiesta Range con 206 e un intervallo", async ({ request }) => {
-  const redirect = await request.get(urlMedia("track", SITO_PUBBLICATO, TRACCIA_UPLOAD), {
-    maxRedirects: 0,
-  });
-  expect(redirect.status()).toBe(302);
-
-  const firmato = redirect.headers()["location"] ?? "";
-  expect(firmato).toContain("/storage/v1/object/sign/site-tracks/");
-
-  const parziale = await request.get(firmato, { headers: { Range: "bytes=0-99" } });
-
-  expect(parziale.status(), "lo Storage deve servire un intervallo, non il file intero").toBe(206);
-  expect(parziale.headers()["content-range"]).toBe(`bytes 0-99/${BYTES.byteLength}`);
-  expect(await parziale.body()).toHaveLength(100);
+  // Diagnosi prima dell'asserzione: questo e' il fallimento che vogliamo leggere per primo.
+  expect(
+    risposta.status(),
+    `la route non e' configurata — ${dettaglio}. «media non configurato» significa che il ` +
+      `processo Next non ha costruito il client privilegiato: controllare che il job esporti ` +
+      `NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY e SUPABASE_SERVICE_ROLE_KEY, ` +
+      `e che l'URL dello stack locale (http su loopback) sia accettato da readPublicSupabaseEnv.`,
+  ).not.toBe(500);
 });
 
 // ---------------------------------------------------------------- dinieghi
@@ -205,7 +207,7 @@ for (const { caso, url } of DINIEGHI) {
     const risposta = await request.get(url, { maxRedirects: 0 });
 
     // Esito atteso dichiarato: codice, corpo esatto, nessun `Location`.
-    expect(risposta.status()).toBe(404);
+    expect(risposta.status(), `atteso 404 — ${await descrivi(risposta)}`).toBe(404);
     expect(await risposta.json()).toEqual({ error: "media non disponibile" });
     expect(risposta.headers()["location"]).toBeUndefined();
     expect(JSON.stringify(risposta.headers())).not.toContain("object/sign");
@@ -272,8 +274,62 @@ test("un identificativo malformato è 400, e non rivela nulla su cosa esiste", a
     maxRedirects: 0,
   });
 
-  expect(risposta.status()).toBe(400);
+  expect(risposta.status(), `atteso 400 — ${await descrivi(risposta)}`).toBe(400);
   expect(await risposta.json()).toEqual({ error: "richiesta non valida" });
+});
+
+// ---------------------------------------------------------------- caso concesso
+//
+// Dopo i dinieghi, di proposito: se qualcosa si rompe qui, il nucleo di sicurezza ha
+// gia' riportato il proprio esito invece di restare «non partito».
+
+test("l'asset di un sito pubblicato risponde 302 verso un URL firmato", async ({ request }) => {
+  const risposta = await request.get(urlMedia("asset", SITO_PUBBLICATO, ASSET_HERO), {
+    maxRedirects: 0,
+  });
+
+  expect(risposta.status(), `atteso 302 — ${await descrivi(risposta)}`).toBe(302);
+
+  const location = risposta.headers()["location"] ?? "";
+  expect(location, "il bersaglio deve essere una firma, non un URL pubblico").toContain(
+    "/storage/v1/object/sign/site-assets/",
+  );
+  expect(location).toContain("token=");
+  expect(location).not.toContain("/object/public/");
+
+  // Il redirect non si mette in cache: è il punto in cui si verifica la pubblicazione.
+  expect(risposta.headers()["cache-control"]).toBe("no-store");
+  // Il corpo è vuoto: il path sta nel `Location` e da nessun'altra parte.
+  expect(await risposta.body()).toHaveLength(0);
+});
+
+test("seguendo il redirect arrivano i byte del file, dallo Storage", async ({ request }) => {
+  const risposta = await request.get(urlMedia("asset", SITO_PUBBLICATO, ASSET_HERO));
+
+  expect(risposta.status(), `atteso 200 dopo il redirect — ${await descrivi(risposta)}`).toBe(200);
+  expect(risposta.headers()["content-type"]).toContain("image/jpeg");
+  expect(Buffer.from(await risposta.body()).equals(BYTES)).toBe(true);
+});
+
+/**
+ * La ragione per cui Ray ha scelto il redirect: senza `Range`, spostarsi dentro un
+ * brano significa riscaricarlo. Qui si misura che lo Storage risponda davvero 206
+ * sull'URL firmato che la route consegna.
+ */
+test("la traccia risponde a una richiesta Range con 206 e un intervallo", async ({ request }) => {
+  const redirect = await request.get(urlMedia("track", SITO_PUBBLICATO, TRACCIA_UPLOAD), {
+    maxRedirects: 0,
+  });
+  expect(redirect.status(), `atteso 302 sulla traccia — ${await descrivi(redirect)}`).toBe(302);
+
+  const firmato = redirect.headers()["location"] ?? "";
+  expect(firmato).toContain("/storage/v1/object/sign/site-tracks/");
+
+  const parziale = await request.get(firmato, { headers: { Range: "bytes=0-99" } });
+
+  expect(parziale.status(), "lo Storage deve servire un intervallo, non il file intero").toBe(206);
+  expect(parziale.headers()["content-range"]).toBe(`bytes 0-99/${BYTES.byteLength}`);
+  expect(await parziale.body()).toHaveLength(100);
 });
 
 // ---------------------------------------------------------------- le superfici
