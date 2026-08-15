@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { isAllowedEmbed } from "../../app/[slug]/embed";
 import { buildListenView, resolveSite } from "../../app/[slug]/read-model";
+import { mediaUrl } from "../media/url";
 import { FIXTURE_IDS, FIXTURE_SLUGS, FakePublicDatabase, fixtureSites } from "./fixtures";
 import { createPublicSiteReader } from "./public-site-reader";
 import { SiteReaderRowError } from "./rows";
@@ -157,21 +158,55 @@ describe("ciò che non ha una sorgente pubblica non viene inventato", () => {
     expect(database.queries).toHaveLength(before);
   });
 
-  it("una traccia upload arriva senza audio_url e il read model la scarta con la ragione giusta", async () => {
+  /**
+   * Il test che prima dichiarava il buco: la traccia `upload` arrivava senza `audio_url` e
+   * il read model la scartava con `upload-source-missing`. Ora la sorgente esiste, ed e' la
+   * route media. Se qualcuno togliesse `withAudioUrl` dall'adattatore, questo torna rosso.
+   */
+  it("una traccia upload arriva con audio_url che punta alla route media", async () => {
     const { siteReader } = reader();
     const { tracks } = await siteReader.loadListen(FIXTURE_IDS.nvllClick);
 
-    expect(tracks.find((track) => track.source === "upload")?.audio_url).toBeUndefined();
+    const upload = tracks.find((track) => track.source === "upload");
+    expect(upload?.audio_url).toBe(
+      mediaUrl("track", FIXTURE_IDS.nvllClick, "aaaa0001-0000-0000-0000-000000000000"),
+    );
 
     const view = buildListenView(tracks, isAllowedEmbed);
-    expect(view.rejected).toEqual([
-      {
-        id: "aaaa0001-0000-0000-0000-000000000000",
-        title: "Traccia caricata",
-        reason: "upload-source-missing",
-      },
-    ]);
-    expect(view.tracks.map((track) => track.kind)).toEqual(["embed"]);
+    // Nessuno scarto: l'upload ora e' riproducibile, l'embed lo era gia'.
+    expect(view.rejected).toEqual([]);
+    expect(view.tracks.map((track) => track.kind)).toEqual(["upload", "embed"]);
+    expect(view.tracks.find((track) => track.kind === "upload")?.src).toBe(upload?.audio_url);
+  });
+
+  it("una traccia embed non riceve nessuna sorgente audio: non ha un file", async () => {
+    const { siteReader } = reader();
+    const { tracks } = await siteReader.loadListen(FIXTURE_IDS.nvllClick);
+
+    const embed = tracks.find((track) => track.source === "embed");
+    expect(embed?.audio_url).toBeUndefined();
+  });
+
+  it("l'URL audio nomina il tenant della riga, non quello chiesto dal chiamante", async () => {
+    const { siteReader } = reader();
+    const { tracks } = await siteReader.loadListen(FIXTURE_IDS.miriam);
+
+    for (const track of tracks) {
+      if (track.source !== "upload") continue;
+      expect(track.audio_url).toContain(FIXTURE_IDS.miriam);
+      expect(track.audio_url).not.toContain(FIXTURE_IDS.nvllClick);
+    }
+  });
+
+  it("l'URL audio non porta il path privato, che l'adattatore non legge nemmeno", async () => {
+    const { database, siteReader } = reader();
+    const { tracks } = await siteReader.loadListen(FIXTURE_IDS.nvllClick);
+
+    for (const track of tracks) {
+      expect(track.audio_url ?? "").not.toContain(".mp3");
+      expect(track.audio_url ?? "").not.toContain("storage");
+    }
+    expect(database.queries.flatMap((query) => query.columns)).not.toContain("storage_path");
   });
 });
 

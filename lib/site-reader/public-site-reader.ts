@@ -9,21 +9,29 @@
 // l'unico modulo che sa com'è fatta una catena `.from().select().eq()` è
 // `postgrest-row-source.ts`, che si può sostituire senza toccare una riga di mappatura.
 //
-// ── Ciò che questo adattatore NON restituisce, e perché non è una dimenticanza ─────────
+// ── La sorgente audio, e da dove arriva ───────────────────────────────────────────────
+//
+// `PublicTrackRow.audio_url` era il campo mancante che teneva LISTEN muto: `public_tracks`
+// non espone `storage_path` e non deve, quindi il read model scartava ogni traccia `upload`
+// con `upload-source-missing`. La route media esiste ora, e l'URL che la raggiunge non è un
+// dato del database: è una funzione di `(site_id, id)`, cioè di due colonne già pubbliche.
+//
+// Si costruisce quindi qui, dopo la lettura, con `mediaUrl()` — un modulo senza import.
+// Nessuna query cambia, nessuna colonna nuova viene chiesta, e il path privato resta dove
+// sta. Chi decide se quel file è visibile non è questo adattatore: è la route, quando il
+// browser chiede l'audio, e lo decide su `published`, tenant e `purged_at`.
+//
+// Le tracce `embed` non ricevono nulla: non hanno file, e §5 lo impone con un CHECK.
+//
+// ── Ciò che questo adattatore NON restituisce ancora ──────────────────────────────────
 //
 // `PublicAssetRow` pretende `public_url` e `alt`. La proiezione `public_assets` espone
-// `id`, `site_id`, `kind`, `sort_order` e nient'altro: `storage_path` è privato per §6 e
-// `alt` non esiste nemmeno come colonna in `site_assets`. Un asset senza URL pubblico non
-// è un'immagine renderizzabile, e inventare qui un percorso — `/api/media/<id>`, un URL
-// firmato, un placeholder — significherebbe scrivere il contratto di una route che sta in
-// un'altra PR e che potrebbe non chiamarsi così.
-//
-// Vale quindi la stessa regola già scritta per le tracce `upload` in `read-model.ts`
-// (`upload-source-missing`): finché la sorgente pubblica non esiste, la collezione resta
-// vuota. `FeedRecords.assets`, `EpkRecords.photoKit` e `MerchRecords.items` sono vuoti e
-// **nessuna query parte** verso `public_assets`. I post invece sono contenuto testuale
-// completo e vengono resi: FEED oggi mostra le didascalie, che è ciò che il renderer sa
-// mostrare (`app/[slug]/feed/page.tsx`).
+// `id`, `site_id`, `kind`, `sort_order` e nient'altro; `alt` non esiste nemmeno come colonna
+// in `site_assets`. L'URL ora saprei costruirlo — è lo stesso `mediaUrl()` con `kind`
+// `asset` — ma `FeedRecords.assets`, `EpkRecords.photoKit` e `MerchRecords.items` sono
+// consumati da `app/[slug]/surface-content.tsx`, che in questo momento è in mano a un altro
+// filone. Restano vuoti e **nessuna query parte** verso `public_assets`: chiuderlo qui
+// significherebbe scrivere metà di una superficie che sta cambiando altrove.
 
 import {
   EMPTY_MERCH,
@@ -32,9 +40,11 @@ import {
   type ListenRecords,
   type MerchRecords,
   type PublicSiteRow,
+  type PublicTrackRow,
   type PublishedSiteIndexRow,
   type SiteReader,
 } from "../../app/[slug]/site-reader";
+import { mediaUrl } from "../media/url";
 import type { PublicRelation, PublicRowSource } from "./row-source";
 import {
   parseRows,
@@ -57,6 +67,16 @@ const BY_SORT_ORDER = [
 
 /** La sitemap deve essere stabile fra due build a parità di dati. */
 const BY_SLUG = [{ column: "slug", ascending: true }] as const;
+
+/**
+ * Sorgente audio della traccia `upload`: la route media, indirizzata con le due colonne
+ * pubbliche che la riga già porta. `row.site_id` e non il parametro del metodo, perché il
+ * tenant di una riga è un dato della riga — se i due divergessero, quello giusto è questo.
+ */
+function withAudioUrl(row: PublicTrackRow): PublicTrackRow {
+  if (row.source !== "upload") return row;
+  return { ...row, audio_url: mediaUrl("track", row.site_id, row.id) };
+}
 
 export function createPublicSiteReader(source: PublicRowSource): SiteReader {
   async function rowsOf(
@@ -95,9 +115,8 @@ export function createPublicSiteReader(source: PublicRowSource): SiteReader {
     },
 
     async loadListen(siteId: string): Promise<ListenRecords> {
-      // `audio_url` resta assente: `public_tracks` non espone `storage_path` e non deve.
-      // Il read model scarta l'upload con `upload-source-missing`, che è l'esito corretto.
-      return { tracks: parseRows(publicTrackContract, await rowsOf(publicTrackContract, siteId)) };
+      const rows = parseRows(publicTrackContract, await rowsOf(publicTrackContract, siteId));
+      return { tracks: rows.map(withAudioUrl) };
     },
 
     async loadFeed(siteId: string): Promise<FeedRecords> {
