@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { SiteShell } from "../../components/site-shell/SiteShell";
 import { baseUrl } from "../../lib/base-url";
+import { mediaUrl } from "../../lib/media/url";
 import { loadListen, loadSite } from "./composition";
 import { buildListenView } from "./read-model";
 import { isAllowedEmbed } from "./embed";
@@ -39,7 +40,20 @@ export default async function HomeSurface({ params }: RouteParams) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: jsonLdScriptContent(jsonLd) }}
       />
-      <SiteShell config={site.config} palette={site.palette} previewId={site.slug} />
+      {/*
+        HOME senza visual principale era il buco visibile: `hero_asset_id` esiste in
+        `public_sites` (§7: FK composita fuori dal JSON), ma nessuna sorgente pubblica sapeva
+        trasformarlo in un'immagine. Qui la pagina scrive soltanto un URL — `lib/media/url.ts`
+        non ha import, quindi il presidio di `composition.test.ts` resta intatto: questa
+        cartella non raggiunge il client Supabase. Il controllo su `published`, sulla purga e
+        sul tenant lo fa la route quando il browser chiede l'immagine.
+      */}
+      <SiteShell
+        config={site.config}
+        palette={site.palette}
+        previewId={site.slug}
+        heroSrc={site.heroAssetId === null ? null : mediaUrl("asset", site.id, site.heroAssetId)}
+      />
     </>
   );
 }

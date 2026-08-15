@@ -13,6 +13,14 @@ type ShellProps = {
   config: ShellConfig;
   palette: ShellPalette;
   previewId: string;
+  /**
+   * URL della route media per l'hero (`hero_asset_id` di §7), oppure `null`.
+   *
+   * Aggiunta additiva: senza questa prop la shell rende esattamente il segnaposto di prima,
+   * quindi nessun chiamante esistente cambia comportamento. La shell non sa da dove venga
+   * l'URL e non deve saperlo: è una stringa, mai un path dello Storage.
+   */
+  heroSrc?: string | null;
 };
 
 function paletteVars(palette: ShellPalette): CSSProperties {
@@ -43,7 +51,18 @@ export function SurfaceDock({ config, previewId }: Pick<ShellProps, "config" | "
   return <nav className="dock" aria-label={`Superfici di ${config.identity.name ?? "anteprima"}`}>{(["feed", "listen", "epk", "merch", "home"] as const).map((surface) => <a key={surface} className={surface === "epk" ? "dock-center" : ""} href={surface === "home" ? `#content-${previewId}` : `#${surface}-${previewId}`} aria-disabled={!enabled.has(surface)}><Icon name={surfaceIcon[surface]} /><span>{surface.toUpperCase()}</span></a>)}</nav>;
 }
 
-export function SiteShell({ config, palette, previewId }: ShellProps) {
+/**
+ * `<img>` e non `next/image`: la sorgente è la route media, che serve byte già mediati da
+ * un controllo di pubblicazione e con il proprio `content-type`. L'ottimizzatore
+ * aggiungerebbe un secondo passaggio server sullo stesso contenuto, e la sua cache vivrebbe
+ * fuori dal controllo che rende revocabile l'accesso.
+ */
+function HeroImage({ src, alt }: { src: string; alt: string }) {
+  // eslint-disable-next-line @next/next/no-img-element -- vedi la nota qui sopra
+  return <img className="hero-image" src={src} alt={alt} />;
+}
+
+export function SiteShell({ config, palette, previewId, heroSrc = null }: ShellProps) {
   const name = config.identity.name ?? "Senza nome";
   return <section className={`site-shell font-${config.fontPair} icons-${config.iconFamily}`} style={paletteVars(palette)} data-grain={config.grain} data-palette={palette.id} aria-labelledby={`preview-${previewId}`}>
     <a className="skip-link" href={`#content-${previewId}`}>Salta al contenuto</a>
@@ -52,7 +71,9 @@ export function SiteShell({ config, palette, previewId }: ShellProps) {
       <p className="eyebrow">{config.identity.location}</p>
       <h1 id={`preview-${previewId}`}>{name}</h1>
       <p className="claim">{config.identity.claim}</p>
-      <div className="hero-grid" aria-label="Visual principale segnaposto"><div className="hero-mark" aria-hidden="true">{name.slice(0, 1)}</div><p>{config.identity.shortBio}</p></div>
+      {heroSrc === null
+        ? <div className="hero-grid" aria-label="Visual principale segnaposto"><div className="hero-mark" aria-hidden="true">{name.slice(0, 1)}</div><p>{config.identity.shortBio}</p></div>
+        : <div className="hero-grid" aria-label="Visual principale"><HeroImage src={heroSrc} alt={`Visual principale di ${name}`} /><p>{config.identity.shortBio}</p></div>}
     </div>
     <PlayerShell artist={name} />
     <SurfaceDock config={config} previewId={previewId} />

@@ -105,12 +105,49 @@ jobs:
       # Chiavi dello stack locale ed effimero, generate dalla CLI a ogni run e
       # valide solo dentro questo runner: non sono segreti, non vanno in un
       # secret di repository e non passano dal diff.
+      #
+      # `SERVICE_ROLE_KEY` serve alla route media (`/api/media/...`): senza, la
+      # route risponde 500 «media non configurato» su ogni caso — positivo e
+      # negativo — e i test passerebbero per il motivo sbagliato. Vale la stessa
+      # natura effimera delle altre due: si spegne con il runner. Resta vero
+      # L0.7 §6.9 — `service_role` non compare nel client, nel repository e nei
+      # log: qui vive solo nell'ambiente del processo server di Next.
+      #
+      # Lo step fallisce SUBITO se una delle tre è vuota, e stampa i soli NOMI delle
+      # chiavi che `supabase status` restituisce davvero. Mai i valori. Senza questa
+      # verifica un campo rinominato a monte non si manifesta qui: si manifesta molto
+      # più tardi come un 500 dentro un test, cioè come un errore muto da indovinare.
+      # `jq -r 'keys[]'` stampa nomi, non valori: è l'unica cosa che si può mostrare.
       - name: Esporta le credenziali locali per Next
         if: steps.guardia.outputs.presenti == 'true'
         run: |
+          set -euo pipefail
           STATUS=$(npx supabase status -o json)
-          echo "NEXT_PUBLIC_SUPABASE_URL=$(echo "$STATUS" | jq -r '.API_URL')" >> "$GITHUB_ENV"
-          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(echo "$STATUS" | jq -r '.ANON_KEY')" >> "$GITHUB_ENV"
+
+          API_URL=$(echo "$STATUS" | jq -r '.API_URL // empty')
+          ANON_KEY=$(echo "$STATUS" | jq -r '.ANON_KEY // empty')
+          SERVICE_ROLE_KEY=$(echo "$STATUS" | jq -r '.SERVICE_ROLE_KEY // empty')
+
+          MANCANTI=""
+          [ -n "$API_URL" ] || MANCANTI="$MANCANTI API_URL"
+          [ -n "$ANON_KEY" ] || MANCANTI="$MANCANTI ANON_KEY"
+          [ -n "$SERVICE_ROLE_KEY" ] || MANCANTI="$MANCANTI SERVICE_ROLE_KEY"
+
+          echo "Campi esposti da 'supabase status -o json' (soli nomi):"
+          echo "$STATUS" | jq -r 'keys[]' | sed 's/^/  · /'
+
+          if [ -n "$MANCANTI" ]; then
+            echo "::error::supabase status non espone:$MANCANTI — vedi l'elenco dei nomi qui sopra."
+            exit 1
+          fi
+
+          echo "::add-mask::$ANON_KEY"
+          echo "::add-mask::$SERVICE_ROLE_KEY"
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+          } >> "$GITHUB_ENV"
 
       - name: Playwright + axe
         if: steps.guardia.outputs.presenti == 'true'
