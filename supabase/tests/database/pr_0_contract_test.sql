@@ -1,5 +1,5 @@
 begin;
-select plan(27);
+select plan(32);
 
 -- 1. Oggetti, vincoli e piani canonici.
 select has_table('public', 'sites', 'sites esiste');
@@ -92,6 +92,28 @@ reset role;
 -- 7. RLS è una proprietà effettiva dello schema pubblico.
 select ok((select relrowsecurity and relforcerowsecurity from pg_class where oid='public.sites'::regclass), 'sites ha RLS e FORCE RLS');
 select ok((select relrowsecurity and relforcerowsecurity from pg_class where oid='public.site_subscriptions'::regclass), 'subscription ha RLS e FORCE RLS');
+
+-- 8. Config, moderazione, audit e proiezioni pubbliche non aggirano i vincoli.
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '44444444-4444-4444-4444-444444444444', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select throws_ok(
+  $$select public.request_site_review('55555555-5555-5555-5555-555555555555')$$,
+  '23514', null, 'config draft incompleta non entra in review: SQLSTATE 23514'
+);
+select set_config('request.jwt.claim.sub', '11111111-1111-1111-1111-111111111111', true);
+select throws_ok(
+  $$select public.moderate_site('22222222-2222-2222-2222-222222222222','suspend','non autorizzato')$$,
+  '42501', null, 'moderazione non-admin rifiutata: SQLSTATE 42501'
+);
+select set_config('request.jwt.claim.sub', '77777777-7777-7777-7777-777777777777', true);
+select throws_ok(
+  $$update public.moderation_events set reason='manomesso' where site_id='22222222-2222-2222-2222-222222222222'$$,
+  '42501', null, 'audit append-only: UPDATE rifiutato con SQLSTATE 42501'
+);
+reset role;
+select hasnt_column('public', 'public_sites', 'owner_id', 'proiezione pubblica non espone owner');
+select ok(not exists(select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' and c.relname in ('profiles','sites','site_subscriptions','site_usage','site_config','site_assets','site_tracks','site_posts','site_links','site_press','site_dates','site_metrics','site_contacts','site_upload_reservations') and not c.relrowsecurity), 'RLS attiva su tutte le relazioni pubbliche esposte');
 
 select * from finish();
 rollback;
