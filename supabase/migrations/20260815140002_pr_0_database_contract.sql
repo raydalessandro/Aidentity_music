@@ -43,7 +43,7 @@ returns boolean language sql immutable set search_path = '' as $$
     and config->'identity'->>'locale' = 'it-IT'
     and jsonb_typeof(config->'theme') = 'object'
     and (config->'theme') ?& array['ink','panel','paper','muted','dim','line','acid']
-    and jsonb_object_length(config->'theme') = 7
+    and (select count(*) from jsonb_object_keys(config->'theme')) = 7
     and config->>'fontPair' in ('grotesk-mono','serif-sans','display-grotesk')
     and config->>'iconFamily' in ('line','block','stencil')
     and jsonb_typeof(config->'grain') = 'boolean'
