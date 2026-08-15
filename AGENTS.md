@@ -46,6 +46,25 @@ dire la verità.
 `docs/history/` contiene L0, L0.5 e L0.6: servono solo a capire da dove viene una decisione, non a
 prendere decisioni.
 
+## Ambiente, non contratto
+
+Il repo è nato lavorando con Manus e ha poi accolto Claude Code. Le regole qui sopra non sono
+cambiate — sono scritte agnostiche apposta — ma ogni agente porta il proprio ambiente, e due cose
+vanno predisposte perché possa fare ciò che questo documento gli concede già.
+
+**`.claude/settings.json`** pre-approva `git add`, `git commit` e `git push` per le sessioni Claude
+Code. Serve perché il classificatore del client nega quelle operazioni quando il diff tocca
+`.github/workflows/`: è una difesa di default dello strumento, non una regola di questo progetto, e
+scatterebbe su qualunque repository. Senza quel file una patch ai workflow non può partire da una
+sessione agente — e, cosa peggiore, il rifiuto arriva **prima** che la richiesta raggiunga GitHub,
+quindi maschera lo stato reale dei permessi remoti.
+
+**Il token GitHub deve portare lo scope `workflow`** per poter modificare `.github/workflows/`.
+Questi due muri sono indipendenti: finché cadeva il primo non si poteva sapere nulla del secondo.
+
+Nessuna delle due cose allarga il contratto di autonomia. Restano vere, senza eccezioni, tutte le
+righe di «Non puoi, mai» — a partire dal merge su `main`, che resta di Ray.
+
 ## Canale
 
 Se qualcosa non torna e non è risolvibile dentro il contratto, **fermati e chiedi**. Non indovinare.
