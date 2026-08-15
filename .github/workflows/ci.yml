@@ -1,4 +1,3 @@
-
 name: CI
 
 on:
@@ -24,7 +23,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: typecheck, lint, build
+      - name: typecheck, lint, test, build
         run: npm run check
 
   db:
@@ -32,29 +31,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - uses: supabase/setup-cli@v1
+      - uses: actions/setup-node@v4
         with:
-          version: latest
+          node-version: 22
+          cache: npm
+      - run: npm ci
 
-      - name: Avvia lo stack locale
-        run: supabase start -x realtime,imgproxy,studio,edge-runtime,logflare,vector
+      - name: Avvia lo stack locale Supabase
+        run: npx supabase start -x realtime,imgproxy,studio,edge-runtime,logflare,vector
 
       # Il test vero: lo schema deve ricostruirsi dal nulla, ogni volta.
       - name: Ricostruzione da zero (migrazioni + seed)
-        run: supabase db reset
+        run: npx supabase db reset
 
       - name: Lint dello schema
-        run: supabase db lint --fail-on error
+        run: npx supabase db lint --fail-on error
 
       - name: Test pgTAP (RLS, quote, moderazione)
-        run: supabase test db
+        run: npx supabase test db
 
-      - name: Nessuna migrazione fuori sincrono
+      - name: Nessuna deriva fra schema e migrazioni
         run: |
-          supabase db diff --schema public > /tmp/diff.sql
+          npx supabase db diff --schema public > /tmp/diff.sql
           if [ -s /tmp/diff.sql ]; then
-            echo "Lo schema applicato non corrisponde alle migrazioni:"
+            echo "::error::Lo schema applicato non corrisponde alle migrazioni."
             cat /tmp/diff.sql
             exit 1
           fi
@@ -62,17 +62,40 @@ jobs:
   e2e:
     name: E2E e accessibilità
     runs-on: ubuntu-latest
-    # Resta inattivo finché il filone D non introduce i test.
-    if: hashFiles('e2e/**') != ''
     steps:
       - uses: actions/checkout@v4
+
+      # Guardia: il job resta un no-op finché il filone D non introduce i test.
+      # Deve esistere fin da ora, perché gli agenti non possono modificare
+      # i workflow: si accende da solo quando compare la cartella e2e/.
+      - name: Verifica presenza dei test E2E
+        id: guardia
+        run: |
+          if [ -d e2e ] && [ -n "$(ls -A e2e 2>/dev/null)" ]; then
+            echo "presenti=true" >> "$GITHUB_OUTPUT"
+            echo "Test E2E trovati: eseguo la suite."
+          else
+            echo "presenti=false" >> "$GITHUB_OUTPUT"
+            echo "Nessun test E2E ancora presente: job superato senza eseguire nulla."
+          fi
+
       - uses: actions/setup-node@v4
+        if: steps.guardia.outputs.presenti == 'true'
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
+
+      - name: Installa le dipendenze
+        if: steps.guardia.outputs.presenti == 'true'
+        run: npm ci
+
+      - name: Installa Chromium
+        if: steps.guardia.outputs.presenti == 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Playwright + axe
+        if: steps.guardia.outputs.presenti == 'true'
+        run: npm run test:e2e
 
   secrets:
     name: Segreti
@@ -87,8 +110,7 @@ jobs:
           if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
             BASE=$(git rev-list --max-parents=0 HEAD | tail -1)
           fi
-          if git diff --no-color "$BASE"...HEAD \
-             | grep -nE 'sk_live_|rk_live_|whsec_|eyJhbGciOi'; then
+          if git diff --no-color "$BASE"...HEAD | grep -nE 'sk_live_|rk_live_|whsec_|eyJhbGciOi'; then
             echo "::error::Possibile chiave o token nel diff."
             exit 1
           fi
