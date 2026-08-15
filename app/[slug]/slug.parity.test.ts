@@ -19,10 +19,17 @@ function migrationSql(): string {
 /**
  * Estrae il CHECK della colonna `slug` di public.sites.
  *
- * Le migrazioni sono concatenate in ordine, quindi una definizione successiva
- * vincerebbe sul database mentre l'estrattore continuerebbe a leggere la prima:
- * la parità passerebbe a vuoto. Perciò la fonte deve essere **una sola**, e ogni
- * `alter table` che tocchi lo slug rende rosso questo presidio invece di scavalcarlo.
+ * Qui la regola "vince l'ultima" NON si applica, e la differenza è deliberata.
+ * `create or replace function` sostituisce, quindi per `valid_embed_url` la definizione
+ * viva è l'ultima e si legge quella. I CHECK di colonna invece **si sommano**: due CHECK
+ * sono entrambi in vigore e il vincolo effettivo è la loro intersezione, non l'ultimo
+ * scritto. Leggere l'ultimo sottostimerebbe la restrizione.
+ *
+ * Perciò la fonte deve restare unica, e una migrazione che tocchi lo slug rende rosso
+ * questo presidio **di proposito**: quella stessa migrazione deve far riderivare
+ * `RESERVED_SLUGS` e insegnare a questo estrattore come leggere la nuova forma. Andare
+ * rosso costringe qualcuno a guardare; indovinare la forma di un `alter table` che non
+ * esiste ancora produrrebbe un verde che non significa niente.
  */
 function slugCheck(): string {
   const sql = migrationSql();
@@ -33,7 +40,7 @@ function slugCheck(): string {
   ).toHaveLength(1);
   expect(
     sql.match(/slug not in \(/g) ?? [],
-    "la lista degli slug riservati deve avere una sola fonte nelle migrazioni",
+    "la lista degli slug riservati ha più di una fonte: aggiorna RESERVED_SLUGS e questo estrattore",
   ).toHaveLength(1);
   expect(
     sql.match(/alter table (?:only )?public\.sites[^;]*slug/g) ?? [],
