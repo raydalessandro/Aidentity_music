@@ -26,6 +26,9 @@ h1 { max-width: 12ch; margin: 0; font-size: clamp(3rem, 13vw, 9rem); font-weight
 .claim { max-width: 32rem; margin: 2rem 0; color: var(--muted); font-size: clamp(1rem, 2vw, 1.4rem); font-weight: 700; letter-spacing: .04em; }
 .hero-grid { display: grid; grid-template-columns: minmax(9rem, .75fr) 1fr; gap: 1rem; align-items: end; max-width: 42rem; color: var(--muted); }
 .hero-mark { display: grid; width: 100%; aspect-ratio: 1; place-items: center; color: var(--paper); background: var(--acid); font-size: clamp(4rem, 13vw, 8rem); font-weight: 900; line-height: 1; }
+/* Visual principale reso dalla route media: stessa cella e stesse proporzioni del segnaposto,
+   così l'arrivo dell'immagine non sposta il layout. */
+.hero-image { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; background: var(--panel); border: 1px solid var(--line); }
 .hero-grid p { margin: 0; font-size: 1.1rem; }
 .player-shell { display: flex; position: absolute; right: 1rem; bottom: calc(var(--dock-height) + 1rem); left: auto; align-items: center; gap: .55rem; max-width: min(28rem, calc(100% - 2rem)); padding: .6rem .75rem; color: var(--ink); background: var(--panel); border: 1px solid var(--line); box-shadow: 0 1rem 3rem color-mix(in srgb, var(--paper) 70%, transparent); font-size: .78rem; }
 .player-shell span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -42,5 +45,5 @@ h1 { max-width: 12ch; margin: 0; font-size: clamp(3rem, 13vw, 9rem); font-weight
 .icons-stencil .shell-icon { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: square; stroke-linejoin: bevel; stroke-dasharray: 8 1.25; }
 .icons-stencil .shell-icon circle, .icons-stencil .shell-icon rect { fill: currentColor; stroke: none; }
 
-@media (max-width: 36rem) { .preview-stack { padding: 0; gap: 1.25rem; } .preview-intro { padding: 1.5rem; } .site-shell { min-height: 44rem; border-inline: 0; } .player-shell { right: 1rem; left: 1rem; } .hero-grid { grid-template-columns: 1fr; } .hero-mark { max-width: 12rem; } }
+@media (max-width: 36rem) { .preview-stack { padding: 0; gap: 1.25rem; } .preview-intro { padding: 1.5rem; } .site-shell { min-height: 44rem; border-inline: 0; } .player-shell { right: 1rem; left: 1rem; } .hero-grid { grid-template-columns: 1fr; } .hero-mark { max-width: 12rem; } .hero-image { max-width: 12rem; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
