@@ -54,6 +54,24 @@ function contrasto(testo: Rgb, sfondo: Rgb): number {
   return (chiaro + 0.05) / (scuro + 0.05);
 }
 
+/**
+ * Host: `localhost`, non `127.0.0.1`.
+ *
+ * Non è un capriccio ed è la causa del primo giro rosso. Next 16 in modalità
+ * dev blocca le richieste cross-origin alle proprie risorse: con `baseURL`
+ * `http://127.0.0.1:3000` il dev server risponde **403** ai chunk client
+ * (`Blocked cross-origin request to Next.js dev resource`) e nessun componente
+ * `"use client"` viene idratato. Misurato in questo ambiente sulla pagina di
+ * diagnostica: 0 bottoni con `127.0.0.1`, 8 con `localhost`, a parità di tutto
+ * il resto e senza un solo errore in pagina — il fallimento è silenzioso.
+ *
+ * La correzione strutturale è `allowedDevOrigins` in `next.config.ts` oppure il
+ * `baseURL` in `playwright.config.ts`: due file che non appartengono a questo
+ * filone. Qui si sovrascrive il solo `baseURL` di questo spec, che è
+ * l'intervento minimo dentro il perimetro, e si segnala il resto.
+ */
+test.use({ baseURL: "http://localhost:3000" });
+
 const PAGINA = "/diagnostica/epk";
 
 test("axe è pulito su tutte e quattro le palette e sulla pagina intera", async ({ page }) => {
@@ -102,6 +120,37 @@ test("provider fuori set e URL non https non arrivano nel DOM", async ({ page })
   await expect(page.locator('a[href="https://www.tiktok.com/@nvllclick"]')).toHaveCount(
     shellPalettes.length,
   );
+});
+
+/**
+ * L'invariante del bottone ha due metà e vanno misurate entrambe.
+ *
+ * Averne verificata una sola — “0 bottoni nell'HTML servito” — è ciò che ha
+ * lasciato passare un EPK in cui la copia era semplicemente sparita: quella
+ * misura dice cosa succede *prima* dell'idratazione e tace su *dopo*.
+ */
+test("dopo l'idratazione i bottoni di copia esistono, due per EPK su quattro palette", async ({
+  page,
+}) => {
+  await page.goto(PAGINA);
+  await expect(page.locator("#epk-nocturne").getByRole("button")).toHaveCount(2);
+  await expect(page.getByRole("button", { name: /^Copia la bio/ })).toHaveCount(
+    shellPalettes.length * 2,
+  );
+});
+
+test.describe("senza JavaScript", () => {
+  test.use({ javaScriptEnabled: false });
+
+  test("la bio resta leggibile e non si mostra nessun comando inerte", async ({ page }) => {
+    await page.goto(PAGINA);
+    await expect(page.locator('#epk-nocturne [data-epk-bio="short"]')).toBeVisible();
+    // Un bottone che non risponde e non annuncia niente è peggio di nessun bottone.
+    await expect(page.locator("button")).toHaveCount(0);
+    // La regione c'è comunque: è il contenitore dell'annuncio, non l'annuncio.
+    await expect(page.locator('#epk-nocturne [role="status"]')).toHaveCount(1);
+    await expect(page.locator('#epk-nocturne a[href^="mailto:"]')).toHaveCount(2);
+  });
 });
 
 test("la copia della bio annuncia l'esito riuscito agli screen reader", async ({
