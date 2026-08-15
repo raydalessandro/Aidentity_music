@@ -55,23 +55,15 @@ function contrasto(testo: Rgb, sfondo: Rgb): number {
 }
 
 /**
- * Host: `localhost`, non `127.0.0.1`.
+ * Nessun `baseURL` locale: si usa quello di progetto, `http://127.0.0.1:3000`.
  *
- * Non è un capriccio ed è la causa del primo giro rosso. Next 16 in modalità
- * dev blocca le richieste cross-origin alle proprie risorse: con `baseURL`
- * `http://127.0.0.1:3000` il dev server risponde **403** ai chunk client
- * (`Blocked cross-origin request to Next.js dev resource`) e nessun componente
- * `"use client"` viene idratato. Misurato in questo ambiente sulla pagina di
- * diagnostica: 0 bottoni con `127.0.0.1`, 8 con `localhost`, a parità di tutto
- * il resto e senza un solo errore in pagina — il fallimento è silenzioso.
- *
- * La correzione strutturale è `allowedDevOrigins` in `next.config.ts` oppure il
- * `baseURL` in `playwright.config.ts`: due file che non appartengono a questo
- * filone. Qui si sovrascrive il solo `baseURL` di questo spec, che è
- * l'intervento minimo dentro il perimetro, e si segnala il resto.
+ * È voluto. I test di idratazione qui sotto sono la prova di regressione di
+ * `allowedDevOrigins` in `next.config.ts`: senza quella voce il dev server
+ * risponde 403 ai chunk client, nessun componente `"use client"` si idrata e
+ * questi test diventano rossi. Un override locale li farebbe passare comunque
+ * e lascerebbe la trappola armata per chi arriva dopo — il fallimento, senza,
+ * è silenzioso: HTML completo, nessun errore in pagina, niente in console.
  */
-test.use({ baseURL: "http://localhost:3000" });
-
 const PAGINA = "/diagnostica/epk";
 
 test("axe è pulito su tutte e quattro le palette e sulla pagina intera", async ({ page }) => {
