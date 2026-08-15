@@ -420,7 +420,16 @@ function IdentityStep({
   updateSlug: (value: string) => Promise<void>;
 }) {
   const [slug, setSlug] = useState(siteSlug);
-  useEffect(() => setSlug(siteSlug), [siteSlug]);
+  // Risincronizza il campo quando lo slug del sito cambia da fuori. E' il
+  // pattern React per adeguare lo stato a una prop: si confronta col valore
+  // precedente durante il render, invece di farlo in un effetto. Stesso esito,
+  // senza il passaggio di render in piu' in cui il campo mostra ancora il
+  // valore vecchio.
+  const [lastSiteSlug, setLastSiteSlug] = useState(siteSlug);
+  if (siteSlug !== lastSiteSlug) {
+    setLastSiteSlug(siteSlug);
+    setSlug(siteSlug);
+  }
   const fields: readonly [keyof SiteConfigDraft["identity"], string, boolean][] = [
     ["name", "Nome artista", false], ["handle", "Handle", false], ["claim", "Claim", false], ["location", "Luogo", false],
     ["shortBio", "Bio breve", true], ["longBio", "Bio lunga", true],

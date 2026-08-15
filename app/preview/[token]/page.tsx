@@ -27,6 +27,11 @@ export default async function TokenPreviewPage({ params }: { params: Promise<{ t
     .select("site_id,expires_at,revoked_at")
     .eq("token_hash", tokenHash)
     .maybeSingle();
+  // Server Component asincrono: `react-hooks/purity` vieta il non determinismo
+  // nel render di un componente client, ma qui non c'e' nessun render client.
+  // Un controllo di scadenza deve leggere l'ora corrente, e prenderla da
+  // altrove significherebbe fidarsi di un valore arrivato dal chiamante.
+  // eslint-disable-next-line react-hooks/purity
   if (!link || link.revoked_at || new Date(link.expires_at).getTime() <= Date.now()) notFound();
 
   const siteId = link.site_id;
