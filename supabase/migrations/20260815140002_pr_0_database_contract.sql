@@ -263,7 +263,9 @@ create view public.public_sites with (security_invoker=true) as select s.id,s.sl
 create view public.public_tracks with (security_invoker=true) as select t.id,t.site_id,t.title,t.source,t.duration_seconds,t.embed_provider,t.embed_url,t.sort_order from public.site_tracks t join public.sites s on s.id=t.site_id where s.publication_status='published' and t.purged_at is null;
 
 revoke all on all tables in schema public from anon,authenticated;
-grant usage on schema public to anon,authenticated;
+grant usage on schema public to anon,authenticated,service_role;
+grant all on all tables in schema public to service_role;
+grant all on all sequences in schema public to service_role;
 grant select on public.plans,public.public_sites,public.public_tracks to anon,authenticated;
 grant select (id,slug,publication_status) on public.sites to anon;
 grant select (site_id,config,hero_asset_id) on public.site_config to anon;
