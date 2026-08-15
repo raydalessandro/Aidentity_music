@@ -34,7 +34,7 @@
 -- concede esplicitamente le proprie due funzioni.
 
 begin;
-select plan(20);
+select plan(40);
 
 -- ---------------------------------------------------------------------------
 -- 1. L'ACL, letta dal catalogo. E' il presidio che l'advisor usava e pgTAP no.
@@ -77,8 +77,10 @@ select results_eq(
   $$select (p.proname::text collate "default")
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
      where n.nspname = 'public' and p.prosecdef order by 1$$,
-  array['apply_billing_event', 'billing_context', 'moderate_site', 'request_site_review'],
-  'le funzioni SECURITY DEFINER di public sono le quattro dichiarate, nessuna di piu'''
+  array['apply_billing_event', 'billing_context', 'moderate_site', 'request_site_review',
+        'wizard_complete_asset_upload', 'wizard_complete_track_upload', 'wizard_expire_uploads',
+        'wizard_release_upload', 'wizard_reserve_upload'],
+  'le funzioni SECURITY DEFINER di public sono le nove dichiarate, nessuna di piu'''
 );
 
 select ok(not has_function_privilege('anon', 'public.moderate_site(uuid,public.moderation_action,text)', 'execute'),
@@ -89,6 +91,77 @@ select ok(not has_function_privilege('public', 'public.moderate_site(uuid,public
   'PUBLIC non ha EXECUTE su moderate_site');
 select ok(not has_function_privilege('public', 'public.request_site_review(uuid)', 'execute'),
   'PUBLIC non ha EXECUTE su request_site_review');
+
+-- ---------------------------------------------------------------------------
+-- 1-bis. I cinque wrapper del wizard (migrazione C).
+--
+-- L'inventario qui sopra e' cresciuto da quattro a nove, e questa e' la sezione
+-- che gli da' il diritto di crescere. Allargare la lista senza misurare avrebbe
+-- trasformato il presidio in una formalita': e' esattamente il difetto contro cui
+-- questo file e' stato scritto.
+--
+-- Misura effettuata su stack locale prima di toccare il test: applicando la
+-- migrazione C senza il suo blocco `revoke`, tutti e cinque i wrapper hanno
+-- `proacl` NULL -- cioe' il default di Postgres, EXECUTE a PUBLIC -- e
+-- `has_function_privilege('anon', ...)` risponde true. Con la migrazione C
+-- integrale l'ACL diventa `postgres=X/postgres` piu' `service_role=X/postgres`, e
+-- PUBLIC, `anon` e `authenticated` rispondono false. Il buco era latente e la
+-- migrazione lo chiude gia': queste righe lo bloccano in CI.
+--
+-- `authenticated` e' il soggetto piu' importante dei tre, e non e' coperto
+-- dall'is_empty esaustivo qui sopra, che guarda solo PUBLIC e `anon`. Questi
+-- wrapper prendono `actor uuid` come parametro: se una sessione di browser
+-- potesse chiamarli, potrebbe dichiararsi un actor qualsiasi e la verifica di
+-- proprieta' dentro `private.*` lavorerebbe su un'identita' scelta dal chiamante.
+-- Restano di `service_role`, che vive solo nel backend.
+select ok(not has_function_privilege('anon', 'public.wizard_reserve_upload(uuid,uuid,public.reservation_kind,bigint,integer,integer)', 'execute'),
+  'anon non ha EXECUTE su wizard_reserve_upload');
+select ok(not has_function_privilege('anon', 'public.wizard_release_upload(uuid,uuid)', 'execute'),
+  'anon non ha EXECUTE su wizard_release_upload');
+select ok(not has_function_privilege('anon', 'public.wizard_expire_uploads(uuid,uuid)', 'execute'),
+  'anon non ha EXECUTE su wizard_expire_uploads');
+select ok(not has_function_privilege('anon', 'public.wizard_complete_asset_upload(uuid,uuid,public.asset_kind,text,text,bigint)', 'execute'),
+  'anon non ha EXECUTE su wizard_complete_asset_upload');
+select ok(not has_function_privilege('anon', 'public.wizard_complete_track_upload(uuid,uuid,text,text,text,bigint)', 'execute'),
+  'anon non ha EXECUTE su wizard_complete_track_upload');
+
+select ok(not has_function_privilege('public', 'public.wizard_reserve_upload(uuid,uuid,public.reservation_kind,bigint,integer,integer)', 'execute'),
+  'PUBLIC non ha EXECUTE su wizard_reserve_upload');
+select ok(not has_function_privilege('public', 'public.wizard_release_upload(uuid,uuid)', 'execute'),
+  'PUBLIC non ha EXECUTE su wizard_release_upload');
+select ok(not has_function_privilege('public', 'public.wizard_expire_uploads(uuid,uuid)', 'execute'),
+  'PUBLIC non ha EXECUTE su wizard_expire_uploads');
+select ok(not has_function_privilege('public', 'public.wizard_complete_asset_upload(uuid,uuid,public.asset_kind,text,text,bigint)', 'execute'),
+  'PUBLIC non ha EXECUTE su wizard_complete_asset_upload');
+select ok(not has_function_privilege('public', 'public.wizard_complete_track_upload(uuid,uuid,text,text,text,bigint)', 'execute'),
+  'PUBLIC non ha EXECUTE su wizard_complete_track_upload');
+
+select ok(not has_function_privilege('authenticated', 'public.wizard_reserve_upload(uuid,uuid,public.reservation_kind,bigint,integer,integer)', 'execute'),
+  'authenticated non ha EXECUTE su wizard_reserve_upload: il client non prenota da solo');
+select ok(not has_function_privilege('authenticated', 'public.wizard_release_upload(uuid,uuid)', 'execute'),
+  'authenticated non ha EXECUTE su wizard_release_upload');
+select ok(not has_function_privilege('authenticated', 'public.wizard_expire_uploads(uuid,uuid)', 'execute'),
+  'authenticated non ha EXECUTE su wizard_expire_uploads');
+select ok(not has_function_privilege('authenticated', 'public.wizard_complete_asset_upload(uuid,uuid,public.asset_kind,text,text,bigint)', 'execute'),
+  'authenticated non ha EXECUTE su wizard_complete_asset_upload');
+select ok(not has_function_privilege('authenticated', 'public.wizard_complete_track_upload(uuid,uuid,text,text,text,bigint)', 'execute'),
+  'authenticated non ha EXECUTE su wizard_complete_track_upload');
+
+-- La voce ACL positiva. Qui `service_role` si puo' nominare senza la divergenza
+-- descritta in testa al file: la migrazione C gli concede EXECUTE esplicitamente,
+-- quindi la riga e' deterministica sia in locale sia sul cloud. Se una migrazione
+-- futura revocasse anche questa, il wizard smetterebbe di prenotare e finalizzare
+-- upload, e il rosso arriverebbe qui invece che in produzione.
+select ok(has_function_privilege('service_role', 'public.wizard_reserve_upload(uuid,uuid,public.reservation_kind,bigint,integer,integer)', 'execute'),
+  'service_role conserva EXECUTE su wizard_reserve_upload');
+select ok(has_function_privilege('service_role', 'public.wizard_release_upload(uuid,uuid)', 'execute'),
+  'service_role conserva EXECUTE su wizard_release_upload');
+select ok(has_function_privilege('service_role', 'public.wizard_expire_uploads(uuid,uuid)', 'execute'),
+  'service_role conserva EXECUTE su wizard_expire_uploads');
+select ok(has_function_privilege('service_role', 'public.wizard_complete_asset_upload(uuid,uuid,public.asset_kind,text,text,bigint)', 'execute'),
+  'service_role conserva EXECUTE su wizard_complete_asset_upload');
+select ok(has_function_privilege('service_role', 'public.wizard_complete_track_upload(uuid,uuid,text,text,text,bigint)', 'execute'),
+  'service_role conserva EXECUTE su wizard_complete_track_upload');
 
 -- ---------------------------------------------------------------------------
 -- 2. Cosa DEVE fallire: `anon` non entra piu' nella funzione.
