@@ -1,5 +1,5 @@
 begin;
-select plan(32);
+select plan(35);
 
 -- 1. Oggetti, vincoli e piani canonici.
 select has_table('public', 'sites', 'sites esiste');
@@ -114,6 +114,11 @@ select throws_ok(
 reset role;
 select hasnt_column('public', 'public_sites', 'owner_id', 'proiezione pubblica non espone owner');
 select ok(not exists(select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' and c.relname in ('profiles','sites','site_subscriptions','site_usage','site_config','site_assets','site_tracks','site_posts','site_links','site_press','site_dates','site_metrics','site_contacts','site_upload_reservations') and not c.relrowsecurity), 'RLS attiva su tutte le relazioni pubbliche esposte');
+
+-- 9. Quote atomiche: limite esatto consentito, +1 respinto con errcode.
+select has_function('private', 'reserve_upload', array['uuid','reservation_kind','bigint','integer','integer'], 'primitiva quota atomica esiste');
+select lives_ok($$select private.reserve_upload('55555555-5555-5555-5555-555555555555','asset',157286400,12,0)$$, 'quota BASE esatta prenotabile');
+select throws_ok($$select private.reserve_upload('55555555-5555-5555-5555-555555555555','asset',1,0,0)$$, '23514', null, 'quota BASE +1 rifiutata: SQLSTATE 23514');
 
 select * from finish();
 rollback;

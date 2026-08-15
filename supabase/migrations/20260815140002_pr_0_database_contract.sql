@@ -277,3 +277,30 @@ grant execute on function private.is_site_owner(uuid),private.is_platform_admin(
 
 insert into public.plans(code,monthly_price_cents,annual_price_cents,photo_limit,upload_track_limit,storage_bytes) values
  ('base',200,2400,12,3,157286400),('pro',1000,12000,100,30,1073741824),('max',2000,24000,1000,300,8589934592);
+
+
+-- Prenotazione atomica: il lock sulla singola riga usage serializza richieste concorrenti.
+create or replace function private.reserve_upload(
+  target_site uuid, target_kind public.reservation_kind, target_bytes bigint,
+  target_photo_slots integer default 0, target_upload_tracks integer default 0
+) returns uuid language plpgsql security definer set search_path='' as $$
+declare u public.site_usage%rowtype; p public.plans%rowtype; reservation uuid;
+begin
+  if target_bytes <= 0 or target_photo_slots < 0 or target_upload_tracks < 0 then
+    raise exception 'invalid reservation quantities' using errcode='23514';
+  end if;
+  select * into u from public.site_usage where site_id=target_site for update;
+  select plan.* into p from public.site_subscriptions sub join public.plans plan on plan.code=sub.plan_code where sub.site_id=target_site;
+  if u.used_bytes+u.reserved_bytes+target_bytes>p.storage_bytes
+     or u.used_photo_slots+u.reserved_photo_slots+target_photo_slots>p.photo_limit
+     or u.used_upload_tracks+u.reserved_upload_tracks+target_upload_tracks>p.upload_track_limit then
+    raise exception 'plan quota exceeded' using errcode='23514';
+  end if;
+  insert into public.site_upload_reservations(site_id,kind,byte_size,photo_slots,upload_tracks)
+  values(target_site,target_kind,target_bytes,target_photo_slots,target_upload_tracks) returning id into reservation;
+  update public.site_usage set reserved_bytes=reserved_bytes+target_bytes,
+    reserved_photo_slots=reserved_photo_slots+target_photo_slots,
+    reserved_upload_tracks=reserved_upload_tracks+target_upload_tracks where site_id=target_site;
+  return reservation;
+end; $$;
+revoke all on function private.reserve_upload(uuid,public.reservation_kind,bigint,integer,integer) from public,anon,authenticated;
