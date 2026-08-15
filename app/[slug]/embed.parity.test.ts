@@ -137,6 +137,8 @@ describe("accettazione degli URL embed", () => {
     ["youtube", "https://www.youtube.com/watch?v=abc"],
     ["youtube", "https://youtu.be/abc"],
     ["soundcloud", "https://soundcloud.com/artista/brano"],
+    // L0.7 §5 ammette per SoundCloud entrambe le forme, non solo quella nuda.
+    ["soundcloud", "https://www.soundcloud.com/artista/brano"],
   ] as const)("accetta %s con %s", (provider: EmbedProvider, url: string) => {
     expect(isAllowedEmbed(provider, url)).toBe(true);
   });
@@ -147,6 +149,10 @@ describe("accettazione degli URL embed", () => {
     { why: "host arbitrario", provider: "spotify", url: "https://evil.test/open.spotify.com/track/1" },
     { why: "schema non HTTPS", provider: "youtube", url: "http://www.youtube.com/watch?v=abc" },
     { why: "host del player non memorizzabile", provider: "soundcloud", url: "https://w.soundcloud.com/player/?url=x" },
+    // L'host aggiunto è un'alternativa in più, non un prefisso libero.
+    { why: "suffisso ostile dopo l'host www", provider: "soundcloud", url: "https://www.soundcloud.com.evil.test/artista/brano" },
+    { why: "sottodominio non elencato", provider: "soundcloud", url: "https://m.soundcloud.com/artista/brano" },
+    { why: "schema non HTTPS sull'host www", provider: "soundcloud", url: "http://www.soundcloud.com/artista/brano" },
     { why: "provider diverso dall'host", provider: "apple_music", url: "https://open.spotify.com/track/1" },
     { why: "pseudo-schema", provider: "spotify", url: "javascript:alert(1)" },
     { why: "stringa non parsabile", provider: "spotify", url: "non un url" },
@@ -189,6 +195,15 @@ describe("sorgente dell'iframe", () => {
   it("incapsula SoundCloud nel player della piattaforma", () => {
     expect(embedSrc("soundcloud", "https://soundcloud.com/artista/brano")).toBe(
       "https://w.soundcloud.com/player/?url=https%3A%2F%2Fsoundcloud.com%2Fartista%2Fbrano",
+    );
+  });
+
+  // L'host `www.` arriva al player così com'è memorizzato: il player SoundCloud
+  // risolve entrambe le forme, e riscriverle qui significherebbe inventare un URL
+  // che l'utente non ha salvato.
+  it("incapsula anche la forma www senza riscrivere l'host", () => {
+    expect(embedSrc("soundcloud", "https://www.soundcloud.com/artista/brano")).toBe(
+      "https://w.soundcloud.com/player/?url=https%3A%2F%2Fwww.soundcloud.com%2Fartista%2Fbrano",
     );
   });
 });

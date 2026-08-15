@@ -11,7 +11,7 @@ export const EMBED_HOSTS: Readonly<Record<EmbedProvider, readonly string[]>> = {
   spotify: ["open.spotify.com"],
   apple_music: ["music.apple.com", "embed.music.apple.com"],
   youtube: ["youtube.com", "www.youtube.com", "music.youtube.com", "youtu.be"],
-  soundcloud: ["soundcloud.com"],
+  soundcloud: ["soundcloud.com", "www.soundcloud.com"],
 };
 
 /** Host del player SoundCloud: non è un host memorizzabile, solo una destinazione iframe. */
