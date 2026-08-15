@@ -21,7 +21,7 @@ button { font: inherit; }
 .topbar { display: flex; justify-content: space-between; gap: 1rem; border-bottom: 1px solid var(--line); color: var(--muted); font-size: .72rem; font-weight: 700; letter-spacing: .08em; }
 .wordmark { color: var(--ink); }
 .shell-content { display: grid; align-content: center; min-height: 31rem; padding: clamp(2.5rem, 9vw, 7rem) 0; }
-.eyebrow { margin: 0 0 1rem; color: var(--acid); font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.eyebrow { margin: 0 0 1rem; color: var(--ink); font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 h1 { max-width: 12ch; margin: 0; font-size: clamp(3rem, 13vw, 9rem); font-weight: 900; line-height: .82; letter-spacing: -.08em; text-wrap: balance; }
 .claim { max-width: 32rem; margin: 2rem 0; color: var(--muted); font-size: clamp(1rem, 2vw, 1.4rem); font-weight: 700; letter-spacing: .04em; }
 .hero-grid { display: grid; grid-template-columns: minmax(9rem, .75fr) 1fr; gap: 1rem; align-items: end; max-width: 42rem; color: var(--muted); }
@@ -29,12 +29,18 @@ h1 { max-width: 12ch; margin: 0; font-size: clamp(3rem, 13vw, 9rem); font-weight
 .hero-grid p { margin: 0; font-size: 1.1rem; }
 .player-shell { display: flex; position: absolute; right: 1rem; bottom: calc(var(--dock-height) + 1rem); left: auto; align-items: center; gap: .55rem; max-width: min(28rem, calc(100% - 2rem)); padding: .6rem .75rem; color: var(--ink); background: var(--panel); border: 1px solid var(--line); box-shadow: 0 1rem 3rem color-mix(in srgb, var(--paper) 70%, transparent); font-size: .78rem; }
 .player-shell span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.player-shell button { margin-left: auto; padding: .25rem .55rem; color: var(--dim); background: transparent; border: 1px solid var(--line); }
+.player-shell button { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; margin-left: auto; color: var(--acid-ink); background: var(--acid); border: 1px solid var(--acid); opacity: 1; }
 .dock { display: grid; position: absolute; right: 0; bottom: 0; left: 0; grid-template-columns: repeat(5, 1fr); min-height: var(--dock-height); color: var(--muted); background: var(--panel); border-top: 1px solid var(--line); }
-.dock a { display: grid; place-items: center; min-width: 0; padding: .8rem .25rem; font-size: clamp(.56rem, 1.6vw, .78rem); font-weight: 900; letter-spacing: .06em; text-decoration: none; }
+.dock a { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; justify-items: center; gap: .3rem; min-width: 0; padding: .8rem .25rem; font-size: clamp(.56rem, 1.6vw, .78rem); font-weight: 900; letter-spacing: .06em; text-decoration: none; }
 .dock a:hover, .dock a:focus-visible { color: var(--ink); background: color-mix(in srgb, var(--panel) 80%, var(--ink)); outline: 2px solid var(--acid); outline-offset: -2px; }
 .dock a[aria-disabled="true"] { opacity: .38; pointer-events: none; }
-.dock-center { color: var(--paper) !important; background: var(--acid); border-inline: 1px solid var(--line); }
+.dock-center { color: var(--acid-ink) !important; background: var(--acid); border-inline: 1px solid var(--line); }
+.shell-icon { width: 1.15rem; height: 1.15rem; flex: 0 0 auto; }
+.icons-line .shell-icon { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.icons-block .shell-icon { fill: currentColor; stroke: currentColor; stroke-width: 1.25; stroke-linejoin: round; }
+.icons-block .shell-icon path:first-child { fill-rule: evenodd; }
+.icons-stencil .shell-icon { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: square; stroke-linejoin: bevel; stroke-dasharray: 8 1.25; }
+.icons-stencil .shell-icon circle, .icons-stencil .shell-icon rect { fill: currentColor; stroke: none; }
 
 @media (max-width: 36rem) { .preview-stack { padding: 0; gap: 1.25rem; } .preview-intro { padding: 1.5rem; } .site-shell { min-height: 44rem; border-inline: 0; } .player-shell { right: 1rem; left: 1rem; } .hero-grid { grid-template-columns: 1fr; } .hero-mark { max-width: 12rem; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
