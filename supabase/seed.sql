@@ -1,0 +1,1 @@
+-- Fixture locale/CI. Popolato da PR-0 con il sito di esempio NVLL CLICK.
