@@ -16,9 +16,30 @@ function migrationSql(): string {
   return files.map((name) => readFileSync(join(migrationsDir, name), "utf8")).join("\n");
 }
 
-/** Estrae il CHECK della colonna `slug` di public.sites dalla migrazione PR-0. */
+/**
+ * Estrae il CHECK della colonna `slug` di public.sites.
+ *
+ * Le migrazioni sono concatenate in ordine, quindi una definizione successiva
+ * vincerebbe sul database mentre l'estrattore continuerebbe a leggere la prima:
+ * la parità passerebbe a vuoto. Perciò la fonte deve essere **una sola**, e ogni
+ * `alter table` che tocchi lo slug rende rosso questo presidio invece di scavalcarlo.
+ */
 function slugCheck(): string {
   const sql = migrationSql();
+
+  expect(
+    sql.match(/create table public\.sites \(/g) ?? [],
+    "public.sites deve essere definita una volta sola",
+  ).toHaveLength(1);
+  expect(
+    sql.match(/slug not in \(/g) ?? [],
+    "la lista degli slug riservati deve avere una sola fonte nelle migrazioni",
+  ).toHaveLength(1);
+  expect(
+    sql.match(/alter table (?:only )?public\.sites[^;]*slug/g) ?? [],
+    "un alter table sullo slug va riletto qui prima di essere accettato",
+  ).toHaveLength(0);
+
   const table = /create table public\.sites \(([\s\S]*?)\n\);/.exec(sql);
   expect(table?.[1], "tabella public.sites non trovata nelle migrazioni").toBeTruthy();
   const column = /slug text not null unique check \(([\s\S]*?)\),\n/.exec(`${table?.[1] ?? ""}\n`);

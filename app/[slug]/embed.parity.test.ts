@@ -25,6 +25,14 @@ function migrationSql(): string {
  */
 function hostsFromMigration(): Record<string, readonly string[]> {
   const sql = migrationSql();
+
+  // `create or replace`: una seconda definizione vincerebbe sul database mentre
+  // l'estrattore leggerebbe ancora la prima, e la parità passerebbe a vuoto.
+  expect(
+    sql.match(/create or replace function private\.valid_embed_url/g) ?? [],
+    "valid_embed_url deve avere una sola definizione nelle migrazioni",
+  ).toHaveLength(1);
+
   const body = /create or replace function private\.valid_embed_url[\s\S]*?\$\$([\s\S]*?)\$\$;/.exec(sql);
   expect(body?.[1], "funzione private.valid_embed_url non trovata").toBeTruthy();
 
