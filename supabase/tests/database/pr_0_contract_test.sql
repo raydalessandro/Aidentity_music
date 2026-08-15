@@ -13,7 +13,7 @@ select has_function('public', 'moderate_site', array['uuid','moderation_action',
 
 select results_eq(
   $$select code::text || ':' || storage_bytes::text from public.plans order by code$$,
-  array['base:157286400','max:8589934592','pro:1073741824'],
+  array['base:157286400','pro:1073741824','max:8589934592'],
   'quote storage E1 corrette'
 );
 

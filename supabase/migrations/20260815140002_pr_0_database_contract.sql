@@ -265,6 +265,8 @@ create view public.public_tracks with (security_invoker=true) as select t.id,t.s
 revoke all on all tables in schema public from anon,authenticated;
 grant usage on schema public to anon,authenticated;
 grant select on public.plans,public.public_sites,public.public_tracks to anon,authenticated;
+grant select (id,slug,publication_status) on public.sites to anon;
+grant select (site_id,config,hero_asset_id) on public.site_config to anon;
 grant select on public.profiles,public.sites,public.site_subscriptions,public.site_usage,public.site_config,public.platform_admins,public.moderation_events,public.site_preview_links,public.site_assets,public.site_tracks,public.site_posts,public.site_links,public.site_press,public.site_dates,public.site_metrics,public.site_contacts,public.site_upload_reservations to authenticated;
 grant insert,update,delete on public.site_config,public.site_posts,public.site_links,public.site_press,public.site_dates,public.site_metrics,public.site_contacts,public.site_preview_links to authenticated;
 grant execute on function public.request_site_review(uuid),public.moderate_site(uuid,public.moderation_action,text) to authenticated;
