@@ -4,7 +4,7 @@ import { useActionState } from "react";
 
 import { initialMagicLinkState, requestMagicLink, type MagicLinkState } from "./actions";
 
-export function LoginForm() {
+export function LoginForm({ next }: { next?: string }) {
   const [state, formAction, pending] = useActionState<MagicLinkState, FormData>(
     requestMagicLink,
     initialMagicLinkState,
@@ -12,6 +12,13 @@ export function LoginForm() {
 
   return (
     <form action={formAction} noValidate>
+      {/*
+        La destinazione viaggia nel form e non in una variabile di modulo: la
+        pagina e' resa per richiesta, e legarla al modulo la farebbe condividere
+        fra utenti diversi. Il valore e' gia' ripulito dalla pagina e viene
+        ripulito di nuovo dall'azione: non ci si fida di un campo nascosto.
+      */}
+      {next === undefined ? null : <input type="hidden" name="next" value={next} />}
       <label htmlFor="email">Indirizzo email</label>
       <input
         id="email"
