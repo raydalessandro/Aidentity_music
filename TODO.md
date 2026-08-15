@@ -14,6 +14,12 @@ Queste non sono migliorie. Sono le cose che, se restano com'è, si manifestano *
 prodotto davanti a un utente reale** — e alcune non si vedono in CI, perché la CI gira su uno stack
 locale che non ha gli stessi default del cloud.
 
+> Il primo deploy su Vercel è avvenuto. Fatte: la configurazione dell'ambiente ospitato e gli URL
+> di reindirizzo dell'autenticazione. Restano aperte le altre quattro voci della tabella: il limite
+> di upload del progetto ospitato, il testo alternativo delle immagini, i job di retention e la
+> registrazione del webhook Stripe — che resta la più urgente, perché è l'unico scrittore di
+> `sites.publication_status` e finché manca un pagamento valido non pubblica nulla, in silenzio.
+
 | Voce | Perché prima del deploy | Criterio di chiusura |
 |---|---|---|
 | **Configurazione dell'ambiente ospitato** | L'applicazione senza variabili risponde 500 su ogni superficie: `readSiteUrl` e i client Supabase falliscono alla costruzione. Non è un difetto del codice, ma il primo caricamento della home lo sembra. | Su Vercel sono impostate `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_SITE_URL`, `SUPABASE_SERVICE_ROLE_KEY` e le sei `STRIPE_*` in modalità test. `NEXT_PUBLIC_SITE_URL` è il dominio vero, non un indirizzo di loopback. |
@@ -22,6 +28,21 @@ locale che non ha gli stessi default del cloud.
 | **Immagini senza testo alternativo** | `site_assets` non ha `alt`, né larghezza, né altezza. Ora che le immagini vengono rese davvero, ogni `<img>` di HOME e FEED esce senza alternativa testuale: è una barriera per chi usa uno screen reader, e axe la segnalerà sulla prima superficie pubblica con una foto. | Lo schema porta un testo alternativo per asset, il wizard lo raccoglie come campo obbligatorio per gli asset visibili, il renderer lo usa, e un test e2e con axe passa su una pagina che contiene almeno un'immagine reale. |
 | **Retention: avvisi e purge non esistono** | La migrazione del billing valorizza correttamente `subscription_ended_at` e `purge_after = ended_at + 90 giorni`, ma **non c'è nulla che li esegua**. Un sito disdetto oggi accumula una data di purga che nessuno onora: gli avvisi a 60 e 80 giorni non partono e al giorno 90 gli oggetti Storage restano. È un impegno verso l'utente, non solo pulizia. | Esiste un'esecuzione periodica che manda gli avvisi a 60 e 80 giorni, e al giorno 90 elimina gli oggetti Storage, scrive `assets_purged_at` e conserva la riga come tombstone, con un test che dimostra l'idempotenza (eseguirla due volte non cancella due volte, e non tocca un sito ripubblicato nel frattempo). |
 | **Registrazione del webhook Stripe** | Il webhook è l'unico scrittore di `sites.publication_status`. Se l'endpoint non è registrato sul dominio di produzione, un pagamento valido non pubblica niente e il sito resta in bozza senza che nulla lo segnali. | L'endpoint punta a `/api/stripe/webhook` sul dominio vero, il segreto di firma è impostato, e un pagamento con carta di test porta un sito da `draft` a `pending_review`. |
+
+---
+
+## 1-bis. Perché sembri un prodotto
+
+Il funnel esiste per intero — login → wizard → sito → preview → `/slug` con le sue superfici — ma
+non ha una porta, e la porta di casa dell'artista non naviga. Tre punti, decisi con Ray, da fare
+**uno alla volta** con controllo visuale in preview fra l'uno e l'altro. Design essenziale: il
+lavoro di rifinitura viene dopo, in branch separate, a prodotto online.
+
+| # | Voce | Criterio di chiusura | Stato |
+|---|---|---|---|
+| 1 | **Il sito pubblicato smette di comportarsi da anteprima** | Il dock di `SiteShell` porta alle rotte (`/slug/feed`) e non alle ancore; una superficie spenta non compare invece di comparire con `aria-disabled`, che non impedisce la navigazione; la topbar non dice `PREVIEW` su un sito vero; il player segnaposto spento non affianca il `PlayerBar` reale. Dock e `SurfaceNav` leggono lo stesso `surfaceHref`. | chiusa da questa PR |
+| 2 | **La home ha una porta** | `app/page.tsx` oggi è il banco del filone A: quattro artisti finti, intestazione `FILONE A / GUSCIO THEMABLE`, e **zero** `href` in tutta la pagina — `/login` è raggiungibile solo digitandolo. Chiuso quando la radice è una landing con una promessa e un ingresso all'accesso, con lo showroom dei template sotto come dimostrazione. Nota: in preview il magic link non completa, perché gli URL delle deployment non sono nella allow-list dei redirect di Supabase. | aperta |
+| 3 | **Il webhook Stripe è registrato** | Vedi §1: senza, un pagamento valido non pubblica niente e il sito resta in bozza senza che nulla lo segnali. | aperta |
 
 ---
 
