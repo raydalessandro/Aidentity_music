@@ -1,5 +1,5 @@
 begin;
-select plan(37);
+select plan(42);
 
 -- 1. Oggetti, vincoli e piani canonici.
 select has_table('public', 'sites', 'sites esiste');
@@ -115,7 +115,14 @@ select lives_ok($$select public.moderate_site('22222222-2222-2222-2222-222222222
 select is((select count(*)::integer from public.moderation_events where site_id='22222222-2222-2222-2222-222222222222'), 1, 'moderazione lecita produce un singolo audit event');
 reset role;
 select hasnt_column('public', 'public_sites', 'owner_id', 'proiezione pubblica non espone owner');
-select ok(not exists(select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' and c.relname in ('profiles','sites','site_subscriptions','site_usage','site_config','site_assets','site_tracks','site_posts','site_links','site_press','site_dates','site_metrics','site_contacts','site_upload_reservations') and not c.relrowsecurity), 'RLS attiva su tutte le relazioni pubbliche esposte');
+select ok(not exists(select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' and not (c.relrowsecurity and c.relforcerowsecurity)), 'tutte le tabelle public hanno RLS e FORCE RLS salvo nessuna eccezione');
+
+-- 10. Nessuna funzione privilegiata o trigger function è invocabile dal client.
+select ok(not has_function_privilege('anon', 'private.reserve_upload(uuid,public.reservation_kind,bigint,integer,integer)', 'execute'), 'anon non esegue reserve_upload');
+select ok(not has_function_privilege('authenticated', 'private.reserve_upload(uuid,public.reservation_kind,bigint,integer,integer)', 'execute'), 'authenticated non esegue reserve_upload');
+select ok(not has_function_privilege('public', 'private.create_site_dependents()', 'execute'), 'PUBLIC non esegue trigger function');
+select ok(not has_function_privilege('anon', 'private.handle_new_user()', 'execute'), 'anon non esegue trigger function auth');
+select throws_ok($$insert into public.site_preview_links(site_id,token_hash,expires_at) values ('22222222-2222-2222-2222-222222222222','token-in-chiaro',now()+interval '1 hour')$$, '23514', null, 'preview link rifiuta token non hash: SQLSTATE 23514');
 
 -- 9. Quote atomiche: limite esatto consentito, +1 respinto con errcode.
 select has_function('private', 'reserve_upload', array['uuid','reservation_kind','bigint','integer','integer'], 'primitiva quota atomica esiste');

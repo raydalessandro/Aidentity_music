@@ -114,7 +114,7 @@ create table public.site_usage (
 create table public.platform_admins (user_id uuid primary key references public.profiles(id) on delete cascade, created_at timestamptz not null default now());
 create table public.site_preview_links (
   id uuid primary key default gen_random_uuid(), site_id uuid not null references public.sites(id) on delete cascade,
-  token_hash text not null unique, expires_at timestamptz not null, revoked_at timestamptz, created_at timestamptz not null default now(), check (expires_at > created_at)
+  token_hash text not null unique check (token_hash ~ '^[0-9a-f]{64}$'), expires_at timestamptz not null, revoked_at timestamptz, created_at timestamptz not null default now(), check (expires_at > created_at)
 );
 create table public.site_assets (
   id uuid primary key default gen_random_uuid(), site_id uuid not null references public.sites(id) on delete cascade,
