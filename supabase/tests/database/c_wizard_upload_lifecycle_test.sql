@@ -1,5 +1,5 @@
 begin;
-select plan(37);
+select plan(38);
 
 -- ---------------------------------------------------------------------------
 -- 1. Superficie RPC: backend-only, senza aprire lo schema private.
@@ -70,15 +70,33 @@ select ok(
    from pg_policies where schemaname='storage' and policyname='wizard_track_storage_insert'),
   'policy track è concessa solo ad authenticated'
 );
+-- L'INSERT non confronta piu' i byte: Storage valuta la RLS prima che i byte
+-- arrivino e in quel momento `metadata` non ha ancora la chiave `size`, quindi
+-- quella condizione negava ogni upload. Restano le altre: owner, prenotazione
+-- attiva e non scaduta, e il path deterministico, che e' cio' che lega
+-- l'oggetto alla singola prenotazione.
 select ok(
-  (select with_check like '%byte_size%' and with_check like '%status = ''reserved''%' and with_check like '%expires_at%'
+  (select with_check like '%owner_id%' and with_check like '%status = ''reserved''%'
+      and with_check like '%expires_at%' and with_check like '%/object%'
    from pg_policies where schemaname='storage' and policyname='wizard_asset_storage_insert'),
-  'INSERT asset lega byte, stato attivo e scadenza alla prenotazione'
+  'INSERT asset lega owner, stato attivo, scadenza e path deterministico alla prenotazione'
 );
 select ok(
-  (select with_check like '%byte_size%' and with_check like '%status = ''reserved''%' and with_check like '%expires_at%'
+  (select with_check like '%owner_id%' and with_check like '%status = ''reserved''%'
+      and with_check like '%expires_at%' and with_check like '%/object%'
    from pg_policies where schemaname='storage' and policyname='wizard_track_storage_insert'),
-  'INSERT track lega byte, stato attivo e scadenza alla prenotazione'
+  'INSERT track lega owner, stato attivo, scadenza e path deterministico alla prenotazione'
+);
+-- L'assenza e' una decisione, non una dimenticanza. Reintrodurre il confronto
+-- nella stessa forma rimetterebbe a zero gli upload di tutti: chi ci prova deve
+-- trovare qui un rosso e la ragione scritta nella migrazione, non scoprirlo in
+-- produzione. Il modo giusto di riottenerlo e' aperto nel debito del TODO.
+select ok(
+  (select bool_and(with_check not like '%metadata%' and with_check not like '%byte_size%')
+   from pg_policies
+    where schemaname='storage'
+      and policyname in ('wizard_asset_storage_insert','wizard_track_storage_insert')),
+  'le policy INSERT non confrontano metadata/byte: a quel punto Storage non conosce ancora la dimensione'
 );
 select ok(
   (select qual like '%status = ''reserved''%' and qual like '%expires_at%'

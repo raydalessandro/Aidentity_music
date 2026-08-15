@@ -420,12 +420,43 @@ grant execute on function public.wizard_complete_track_upload(uuid, uuid, text, 
 --
 -- `feat/media-route` crea i due bucket privati e non concede scritture owner.
 -- C aggiunge soltanto INSERT/SELECT temporanei, vincolati a una prenotazione
--- attiva, all'owner, al bucket, al path deterministico e ai byte prenotati.
+-- attiva, all'owner, al bucket e al path deterministico.
 -- Niente UPDATE/upsert e niente DELETE client.
 --
 -- La SELECT speculare serve al RETURNING della Storage API durante l'upload;
 -- dopo consume/release/expire la prenotazione non è più `reserved`, quindi il
 -- browser perde automaticamente anche quella lettura temporanea.
+--
+-- PERCHE' QUI NON SI CONFRONTANO I BYTE
+-- Una versione precedente di questa migrazione chiudeva l'INSERT anche con
+-- `coalesce((metadata->>'size')::bigint, -1) = r.byte_size`. Non funzionava, e
+-- non per un dettaglio di scrittura: Supabase Storage valuta la RLS PRIMA che i
+-- byte arrivino. In `storage-api`, `upload()` chiama `prepareUpload` ->
+-- `canUpload`, che esegue l'unico INSERT sottoposto a policy passando
+-- `metadata: { mimetype, contentLength }`. La chiave `size` in quel momento non
+-- esiste ancora: nasce dopo, quando i byte sono nel backend e `completeUpload`
+-- scrive la riga definitiva con `asSuperUser()`, che la RLS non attraversa.
+-- Quindi `metadata->>'size'` era sempre NULL, il confronto sempre falso, e la
+-- policy negava OGNI upload di OGNI utente, non solo quelli sbagliati.
+--
+-- Misurato: con `metadata` privo della chiave `size` l'INSERT viene negato con
+-- "new row violates row-level security policy"; con `size` valorizzato passa, a
+-- parità di sessione owner, path e prenotazione. Le altre sei condizioni erano
+-- e restano soddisfatte.
+--
+-- Non si ripiega su `contentLength`, che pure è presente: quel valore è
+-- `declaredContentLength ?? contentLength`, cioè deriva dall'header dichiarato
+-- dal client. Confrontare la prenotazione con un numero che il chiamante sceglie
+-- sarebbe una garanzia solo apparente, peggiore dell'assenza perché sembra una
+-- difesa.
+--
+-- La garanzia sui byte non sparisce, sta un livello più in là e vede il dato
+-- vero: `lib/wizard/upload-server.ts` interroga l'oggetto con `info(path)` e
+-- rifiuta con `stored-object-mismatch` se `data.size` non coincide con i byte
+-- prenotati, PRIMA di consumare la prenotazione e aggiornare la quota. Lì la
+-- dimensione è quella effettivamente memorizzata, non quella dichiarata.
+-- La perdita è di difesa in profondità, non di correttezza, ed è registrata nel
+-- debito dichiarato del TODO.
 -- ---------------------------------------------------------------------------
 
 create policy wizard_asset_storage_insert
@@ -443,7 +474,6 @@ with check (
       and r.status = 'reserved'
       and r.expires_at > now()
       and name = r.site_id::text || '/' || r.id::text || '/object'
-      and coalesce((metadata->>'size')::bigint, -1) = r.byte_size
   )
 );
 
@@ -480,7 +510,6 @@ with check (
       and r.status = 'reserved'
       and r.expires_at > now()
       and name = r.site_id::text || '/' || r.id::text || '/object'
-      and coalesce((metadata->>'size')::bigint, -1) = r.byte_size
   )
 );
 
