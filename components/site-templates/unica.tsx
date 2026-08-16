@@ -66,25 +66,34 @@ function SurfaceLink({
   href,
   className,
   disabled,
+  interactive = true,
+  contractCenter = false,
   children,
 }: {
   readonly published: boolean;
   readonly href: string;
   readonly className?: string;
   readonly disabled?: boolean;
+  readonly interactive?: boolean;
+  readonly contractCenter?: boolean;
   readonly children: React.ReactNode;
 }) {
-  if (published) {
-    return <Link className={className} href={href}>{children}</Link>;
+  const dockHook = contractCenter ? "true" : undefined;
+  if (!interactive) {
+    return <span className={className} data-dock-center={dockHook} aria-disabled="true">{children}</span>;
   }
-  return <a className={className} href={href} aria-disabled={disabled}>{children}</a>;
+  if (published) {
+    return <Link className={className} data-dock-center={dockHook} href={href}>{children}</Link>;
+  }
+  return <a className={className} data-dock-center={dockHook} href={href} aria-disabled={disabled}>{children}</a>;
 }
 
 function HomeDock({
   config,
   previewId,
   destination,
-}: Pick<SiteTemplateHomeProps, "config" | "previewId"> & { destination: ShellDestination }) {
+  interactive = true,
+}: Pick<SiteTemplateHomeProps, "config" | "previewId" | "interactive"> & { destination: ShellDestination }) {
   const published = destination.kind === "pubblicato";
 
   return (
@@ -108,6 +117,8 @@ function HomeDock({
             className={className}
             href={homeHref(destination, surface, previewId)}
             disabled={!enabled}
+            interactive={interactive}
+            contractCenter={center}
           >
             {content}
           </SurfaceLink>
@@ -123,15 +134,17 @@ function HomeModule({
   copy,
   href,
   published,
+  interactive,
 }: {
   number: string;
   title: string;
   copy: string;
   href: string;
   published: boolean;
+  interactive: boolean;
 }) {
   return (
-    <SurfaceLink published={published} className={styles.module} href={href}>
+    <SurfaceLink published={published} interactive={interactive} className={styles.module} href={href}>
       <span>{number}</span>
       <b>{title}</b>
       <small>{copy}</small>
@@ -146,6 +159,8 @@ function UnicaHome({
   destination = { kind: "anteprima" },
   heroSrc = null,
   embedded = false,
+  interactive = true,
+  children,
 }: SiteTemplateHomeProps) {
   const name = config.identity.name ?? "SENZA NOME";
   const published = destination.kind === "pubblicato";
@@ -201,16 +216,16 @@ function UnicaHome({
             <h1 id={`preview-${previewId}`}>{name}</h1>
             {config.identity.claim && <p className={styles.claim}>{config.identity.claim}</p>}
             <div className={styles.heroActions}>
-              {listenEnabled && <SurfaceLink published={published} className={styles.primaryCta} href={homeHref(destination, "listen", previewId)}>ASCOLTA</SurfaceLink>}
-              {feedEnabled && <SurfaceLink published={published} className={styles.ghostCta} href={homeHref(destination, "feed", previewId)}>VISUAL</SurfaceLink>}
+              {listenEnabled && <SurfaceLink published={published} interactive={interactive} className={styles.primaryCta} href={homeHref(destination, "listen", previewId)}>ASCOLTA</SurfaceLink>}
+              {feedEnabled && <SurfaceLink published={published} interactive={interactive} className={styles.ghostCta} href={homeHref(destination, "feed", previewId)}>VISUAL</SurfaceLink>}
             </div>
           </div>
         </section>
 
         <section className={styles.moduleStrip} aria-label="Porte del sito">
-          {listenEnabled && <HomeModule published={published} number="01" title="LISTEN" copy="musica e release" href={homeHref(destination, "listen", previewId)} />}
-          {feedEnabled && <HomeModule published={published} number="02" title="FEED" copy="immagini e frammenti" href={homeHref(destination, "feed", previewId)} />}
-          {epkEnabled && <HomeModule published={published} number="03" title="EPK" copy="bio, press e contatti" href={homeHref(destination, "epk", previewId)} />}
+          {listenEnabled && <HomeModule published={published} interactive={interactive} number="01" title="LISTEN" copy="musica e release" href={homeHref(destination, "listen", previewId)} />}
+          {feedEnabled && <HomeModule published={published} interactive={interactive} number="02" title="FEED" copy="immagini e frammenti" href={homeHref(destination, "feed", previewId)} />}
+          {epkEnabled && <HomeModule published={published} interactive={interactive} number="03" title="EPK" copy="bio, press e contatti" href={homeHref(destination, "epk", previewId)} />}
         </section>
 
         <section className={styles.editorial}>
@@ -229,10 +244,12 @@ function UnicaHome({
           <div data-art-slot="rail-b"><span /></div>
           <div data-art-slot="rail-c">{config.identity.handle?.slice(0, 2).toUpperCase() ?? "ID"}</div>
         </section>
+
+        {children}
       </Contenuto>
 
       {published ? null : <PlayerShell artist={name} />}
-      <HomeDock config={config} previewId={previewId} destination={destination} />
+      <HomeDock config={config} previewId={previewId} destination={destination} interactive={interactive} />
     </section>
   );
 }
@@ -254,8 +271,8 @@ function SurfaceDock({
         const className = `${styles.dockLink} ${center ? `${styles.dockCenter} dock-center` : ""}`;
         const content = <><Icon name={SURFACE_ICON[id]} /><span>{item.label}</span></>;
         return id === surface
-          ? <span key={id} className={className} aria-current="page">{content}</span>
-          : <Link key={id} className={className} href={item.href}>{content}</Link>;
+          ? <span key={id} className={className} data-dock-center={center ? "true" : undefined} aria-current="page">{content}</span>
+          : <Link key={id} className={className} data-dock-center={center ? "true" : undefined} href={item.href}>{content}</Link>;
       })}
     </nav>
   );

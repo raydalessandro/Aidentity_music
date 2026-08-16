@@ -26,6 +26,10 @@ export type SiteTemplateHomeProps = {
   heroSrc?: string | null;
   /** Contiene il chrome nel box quando il template vive in showroom/builder. */
   embedded?: boolean;
+  /** False nel live builder: il template rende, ma non finge navigazione fra superfici. */
+  interactive?: boolean;
+  /** Contenuto draft appendibile nella preview owner, dentro lo stesso template. */
+  children?: ReactNode;
 };
 
 export type SiteTemplateNavItem = {

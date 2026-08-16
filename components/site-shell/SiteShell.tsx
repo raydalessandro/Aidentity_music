@@ -41,7 +41,7 @@ export function ShellTopbar({ handle, published }: { handle: string | null; publ
 }
 
 export function PlayerShell({ artist }: { artist: string }) {
-  return <aside className="player-shell" aria-label="Player persistente non attivo"><Icon name="pause" /><span>{artist} — nessuna traccia in riproduzione</span><button type="button" disabled><Icon name="play" label="Riproduci" /></button></aside>;
+  return <aside className="player-shell" data-player-shell aria-label="Player persistente non attivo"><Icon name="pause" /><span>{artist} — nessuna traccia in riproduzione</span><button type="button" disabled><Icon name="play" label="Riproduci" /></button></aside>;
 }
 
 const surfaceIcon: Record<"feed" | "listen" | "epk" | "merch" | "home", IconName> = { feed: "feed", listen: "listen", epk: "epk", merch: "merch", home: "home" };
@@ -64,10 +64,10 @@ export function SurfaceDock({ config, previewId, destination = { kind: "anteprim
 
   if (destination.kind === "pubblicato") {
     const { hrefs } = destination;
-    return <nav className="dock" aria-label={label}>{DOCK_ORDER.filter((surface) => enabled.has(surface)).map((surface) => <Link key={surface} className={surface === "epk" ? "dock-center" : ""} href={hrefs[surface]}><Icon name={surfaceIcon[surface]} /><span>{surface.toUpperCase()}</span></Link>)}</nav>;
+    return <nav className="dock" aria-label={label}>{DOCK_ORDER.filter((surface) => enabled.has(surface)).map((surface) => <Link key={surface} className={surface === "epk" ? "dock-center" : ""} data-dock-center={surface === "epk" ? "true" : undefined} href={hrefs[surface]}><Icon name={surfaceIcon[surface]} /><span>{surface.toUpperCase()}</span></Link>)}</nav>;
   }
 
-  return <nav className="dock" aria-label={label}>{DOCK_ORDER.map((surface) => <a key={surface} className={surface === "epk" ? "dock-center" : ""} href={surface === "home" ? `#content-${previewId}` : `#${surface}-${previewId}`} aria-disabled={!enabled.has(surface)}><Icon name={surfaceIcon[surface]} /><span>{surface.toUpperCase()}</span></a>)}</nav>;
+  return <nav className="dock" aria-label={label}>{DOCK_ORDER.map((surface) => <a key={surface} className={surface === "epk" ? "dock-center" : ""} data-dock-center={surface === "epk" ? "true" : undefined} href={surface === "home" ? `#content-${previewId}` : `#${surface}-${previewId}`} aria-disabled={!enabled.has(surface)}><Icon name={surfaceIcon[surface]} /><span>{surface.toUpperCase()}</span></a>)}</nav>;
 }
 
 /**
