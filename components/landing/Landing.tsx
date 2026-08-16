@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { LANDING_ENTRY_HREF } from "./entry";
+
 /**
  * La porta d'ingresso.
  *
@@ -11,14 +13,6 @@ import Link from "next/link";
  * Design essenziale per scelta: qui si stabilisce che la radice promette qualcosa e offre un
  * ingresso. La rifinitura è lavoro a sé, a prodotto online.
  */
-
-/**
- * L'ingresso porta alla REGISTRAZIONE e non all'accesso: chi arriva qui per la
- * prima volta un account non ce l'ha, e mandarlo su `/login` gli chiederebbe una
- * password che non ha mai scelto. Da `/signup` si raggiunge `/login` in un clic,
- * con `next` conservato; il contrario costava un passaggio in piu' a tutti.
- */
-export const LANDING_ENTRY_HREF = "/signup?next=/app/wizard";
 
 export function Landing() {
   return (
@@ -46,3 +40,5 @@ export function Landing() {
     </section>
   );
 }
+
+export { LANDING_ENTRY_HREF };
