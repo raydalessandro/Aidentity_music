@@ -78,7 +78,7 @@ export function SurfaceDock({ config, previewId, destination = { kind: "anteprim
  */
 function HeroImage({ src, alt }: { src: string; alt: string }) {
   // eslint-disable-next-line @next/next/no-img-element -- vedi la nota qui sopra
-  return <img className="hero-image" src={src} alt={alt} />;
+  return <img className="hero-image" data-hero-image src={src} alt={alt} />;
 }
 
 export function SiteShell({ config, palette, previewId, heroSrc = null, destination = { kind: "anteprima" } }: ShellProps) {

@@ -149,6 +149,7 @@ function UnicaHome({
 }: SiteTemplateHomeProps) {
   const name = config.identity.name ?? "SENZA NOME";
   const published = destination.kind === "pubblicato";
+  const Contenuto = embedded ? "div" : "main";
   const listenEnabled = isEnabled(config, "listen");
   const feedEnabled = isEnabled(config, "feed");
   const epkEnabled = isEnabled(config, "epk");
@@ -167,7 +168,15 @@ function UnicaHome({
       <a className={styles.skipLink} href={`#content-${previewId}`}>Salta al contenuto</a>
       <Topbar name={name} handle={config.identity.handle} published={published} />
 
-      <main id={`content-${previewId}`}>
+      {/*
+        `main` soltanto quando questo guscio E' la pagina. Nello showroom ne
+        convivono quattro nello stesso documento, e quattro landmark `main`
+        sono una violazione di accessibilita' vera: axe la segnala, e chi
+        naviga per landmark si trova quattro «contenuti principali». La prop
+        `embedded` esisteva gia' ma scriveva solo un attributo: ora decide
+        l'elemento.
+      */}
+      <Contenuto id={`content-${previewId}`}>
         <section className={styles.hero}>
           {heroSrc === null ? (
             <div className={styles.heroFallback} aria-label="Visual principale segnaposto">
@@ -175,7 +184,7 @@ function UnicaHome({
             </div>
           ) : (
             // eslint-disable-next-line @next/next/no-img-element -- URL mediato dalla route media.
-            <img className={styles.heroImage} src={heroSrc} alt={`Visual principale di ${name}`} />
+            <img className={styles.heroImage} data-hero-image src={heroSrc} alt={`Visual principale di ${name}`} />
           )}
           <div className={styles.heroShade} aria-hidden="true" />
           <div className={styles.heroGrid} aria-hidden="true" />
@@ -220,7 +229,7 @@ function UnicaHome({
           <div data-art-slot="rail-b"><span /></div>
           <div data-art-slot="rail-c">{config.identity.handle?.slice(0, 2).toUpperCase() ?? "ID"}</div>
         </section>
-      </main>
+      </Contenuto>
 
       {published ? null : <PlayerShell artist={name} />}
       <HomeDock config={config} previewId={previewId} destination={destination} />

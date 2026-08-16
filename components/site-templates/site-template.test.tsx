@@ -234,3 +234,48 @@ describe("navigare fra superfici non deve fermare la musica", () => {
     expect(sorgente).toContain("aria-disabled={disabled}");
   });
 });
+
+describe("quattro gusci nella stessa pagina non sono quattro pagine", () => {
+  // Difetto trovato dalla CI, non da questa suite: Unica rende `<main>` dove il
+  // guscio precedente rendeva un `<div>`. Su un sito vero è corretto, ma lo showroom
+  // monta quattro Home nello stesso documento — e axe segnala «Document has more than
+  // one main landmark». Chi naviga per landmark si troverebbe quattro «contenuti
+  // principali». La prop `embedded` esisteva già ma scriveva solo un attributo.
+  it("incorporato non dichiara un landmark principale", () => {
+    const markup = renderToStaticMarkup(
+      <SiteTemplateHome config={config} palette={palette} previewId="prova" embedded />,
+    );
+    expect(markup).not.toContain("<main");
+  });
+
+  it("da solo invece sì: è la pagina", () => {
+    const markup = renderToStaticMarkup(
+      <SiteTemplateHome config={config} palette={palette} previewId="prova" />,
+    );
+    expect(markup).toContain("<main");
+  });
+
+  it("la radice non contiene più di un landmark principale", async () => {
+    // Il conto vero sulla pagina che axe misura davvero.
+    const { default: Root } = await import("../../app/page");
+    const markup = renderToStaticMarkup(<Root />);
+    expect((markup.match(/<main\b/gu) ?? []).length).toBeLessThanOrEqual(1);
+  });
+});
+
+describe("il visual principale porta un gancio dichiarato", () => {
+  // L'e2e cercava `img.hero-image`, una classe di stile: con i CSS module la classe in
+  // pagina porta un hash e il selettore non trovava nulla. Il contratto è l'attributo.
+  it("l'immagine hero è raggiungibile da `[data-hero-image]`", () => {
+    const markup = renderToStaticMarkup(
+      <SiteTemplateHome
+        config={config}
+        palette={palette}
+        previewId="prova"
+        heroSrc="/api/media/asset/x/y"
+      />,
+    );
+    expect(markup).toContain("data-hero-image");
+    expect(markup).toContain('src="/api/media/asset/x/y"');
+  });
+});

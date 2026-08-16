@@ -337,7 +337,9 @@ test("la traccia risponde a una richiesta Range con 206 e un intervallo", async 
 test("HOME mostra il visual principale, e l'immagine carica davvero", async ({ page }) => {
   await page.goto("/nvll-click");
 
-  const hero = page.locator("img.hero-image");
+  // `[data-hero-image]` e non `.hero-image`: da quando i template usano CSS module la
+  // classe in pagina porta un hash generato. Il gancio dichiarato e' il contratto.
+  const hero = page.locator("img[data-hero-image]");
   await expect(hero).toHaveCount(1);
   await expect(hero).toHaveAttribute("src", urlMedia("asset", SITO_PUBBLICATO, ASSET_HERO));
 
