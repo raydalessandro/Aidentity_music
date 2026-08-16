@@ -1,4 +1,4 @@
-import { baselineTemplate } from "./baseline";
+import { unicaTemplate } from "./unica";
 import {
   DEFAULT_SITE_TEMPLATE_ID,
   type SiteTemplateDefinition,
@@ -6,7 +6,7 @@ import {
 } from "./types";
 
 const SITE_TEMPLATES = {
-  baseline: baselineTemplate,
+  unica: unicaTemplate,
 } satisfies Record<SiteTemplateId, SiteTemplateDefinition>;
 
 export const siteTemplates: readonly SiteTemplateDefinition[] = Object.values(SITE_TEMPLATES);
