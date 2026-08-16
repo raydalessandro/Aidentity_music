@@ -21,8 +21,11 @@ const bodySchema = z.object({
 });
 
 /**
- * Avvia il checkout in modalita' test. Non tocca lo stato di pubblicazione:
- * quello lo scrive soltanto il webhook, dopo che Stripe conferma il pagamento.
+ * Avvia il checkout in modalità test.
+ *
+ * Il ritorno va al Control Room e non alla landing: dopo il pagamento l'utente
+ * deve vedere lo stato del proprio sito, mentre il webhook resta l'unico autore
+ * del lifecycle. Il query param è solo UX, non una conferma di pagamento.
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const supabase = await createSupabaseServerClient();
@@ -39,8 +42,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "richiesta non valida" }, { status: 400 });
   }
 
-  // La proprieta' del sito e' verificata da RLS, non da una condizione scritta
-  // a mano: il client scoped vede soltanto i siti dell'utente.
   const { data: site, error: siteError } = await supabase
     .from("sites")
     .select("id")
@@ -71,11 +72,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     line_items: [{ price: requirePriceId(body.data.planCode, body.data.interval), quantity: 1 }],
     client_reference_id: body.data.siteId,
     // Il webhook legge `site_id` dai metadata della SUBSCRIPTION: e' l'unico
-    // oggetto presente in tutti gli eventi del ciclo di vita.
+    // oggetto presente in tutti gli eventi del ciclo di vita. Metterlo solo
+    // sulla sessione non basta — i metadata della sessione non si propagano
+    // alla subscription, ed e' il modo classico in cui questo si rompe.
     subscription_data: { metadata: { site_id: body.data.siteId } },
     metadata: { site_id: body.data.siteId },
-    success_url: `${siteUrl}/?checkout=ok`,
-    cancel_url: `${siteUrl}/?checkout=annullato`,
+    success_url: `${siteUrl}/app/wizard?checkout=ok`,
+    cancel_url: `${siteUrl}/app/wizard?checkout=annullato`,
   });
 
   return NextResponse.json({ url: session.url }, { status: 200 });

@@ -11,7 +11,6 @@
 // Un banco che cercasse `color:` resterebbe verde davanti a un grigio scurissimo.
 
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
