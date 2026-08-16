@@ -5,7 +5,7 @@ import { SiteTemplateHome } from "@/components/site-templates/SiteTemplate";
 import { siteConfigDraftSchema } from "@/lib/contract";
 import { DraftContentPreview } from "@/lib/wizard/DraftContentPreview";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { paletteForDraft, paletteStyleForDraft } from "@/lib/wizard/palette";
+import { paletteForDraft } from "@/lib/wizard/palette";
 import { epkContentForPreview } from "@/lib/wizard/preview-content";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +20,7 @@ export default async function OwnerPreviewPage({ params }: { params: Promise<{ s
   if (!site) notFound();
 
   const [configResult, contacts, links, press, dates, metrics, assets, tracks, posts] = await Promise.all([
-    supabase.from("site_config").select("config").eq("site_id", siteId).maybeSingle(),
+    supabase.from("site_config").select("config,hero_asset_id").eq("site_id", siteId).maybeSingle(),
     supabase.from("site_contacts").select("id,role,name,email,consent_confirmed_at,sort_order").eq("site_id", siteId).order("sort_order"),
     supabase.from("site_links").select("id,provider,url,sort_order").eq("site_id", siteId).order("sort_order"),
     supabase.from("site_press").select("id,publication,quote,published_on,url,sort_order").eq("site_id", siteId).order("sort_order"),
@@ -36,20 +36,28 @@ export default async function OwnerPreviewPage({ params }: { params: Promise<{ s
     contacts: contacts.data ?? [], links: links.data ?? [], press: press.data ?? [], dates: dates.data ?? [], metrics: metrics.data ?? [],
   });
 
+  const previewId = `owner-${siteId}`;
+  const heroSrc = configResult.data?.hero_asset_id
+    ? `/api/wizard/preview-asset/${configResult.data.hero_asset_id}`
+    : null;
+
   return (
-    <main style={paletteStyleForDraft(parsed.data)}>
-      <p style={{ padding: "12px 16px", margin: 0, fontFamily: "monospace" }}>PREVIEW OWNER · draft non pubblico</p>
-      <SiteTemplateHome config={parsed.data} palette={paletteForDraft(parsed.data)} previewId={`owner-${siteId}`} />
+    <SiteTemplateHome
+      config={parsed.data}
+      palette={paletteForDraft(parsed.data)}
+      previewId={previewId}
+      heroSrc={heroSrc}
+    >
       <DraftContentPreview
         config={parsed.data}
-        previewId={`owner-${siteId}`}
+        previewId={previewId}
         assets={assets.data ?? []}
         tracks={tracks.data ?? []}
         posts={posts.data ?? []}
       />
       <div style={{ maxWidth: 980, margin: "0 auto", padding: "32px 20px 120px" }}>
-        <EpkSurface content={epk} id={`epk-owner-${siteId}`} label="EPK preview owner" />
+        <EpkSurface content={epk} id={`epk-${previewId}`} label="EPK preview owner" />
       </div>
-    </main>
+    </SiteTemplateHome>
   );
 }

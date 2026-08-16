@@ -230,8 +230,13 @@ describe("navigare fra superfici non deve fermare la musica", () => {
     // superficie spenta con `aria-disabled`. Si verificano le due forme esatte invece
     // di ritagliare il corpo della funzione: un ritaglio con una regex è fragile e
     // fallirebbe per ragioni che non c'entrano con l'invariante.
-    expect(sorgente).toContain("<Link className={className} href={href}>");
-    expect(sorgente).toContain("aria-disabled={disabled}");
+    // Non si inchiodano le stringhe esatte: il builder live ha aggiunto a questo
+    // componente `interactive` e il gancio del dock, e un'asserzione letterale si
+    // era rotta per un attributo in mezzo — cioe' per una ragione che non c'entra
+    // con l'invariante. Si verifica il ramo, non la sua punteggiatura.
+    const ramoPubblicato = /if \(published\)\s*\{\s*return <Link/u.test(sorgente);
+    expect(ramoPubblicato, "da pubblicato deve rendere un Link").toBe(true);
+    expect(sorgente).toContain("aria-disabled");
   });
 });
 
@@ -277,5 +282,29 @@ describe("il visual principale porta un gancio dichiarato", () => {
     );
     expect(markup).toContain("data-hero-image");
     expect(markup).toContain('src="/api/media/asset/x/y"');
+  });
+});
+
+describe("la preview incorporata nel builder non finge di navigare", () => {
+  // Il builder live rende il template vero come fondale. Un collegamento che
+  // sembra portare a un'altra superficie, dentro un'anteprima che non naviga,
+  // e' una promessa che l'interfaccia non mantiene — e su mobile e' peggio,
+  // perche' il dito ci finisce sopra per sbaglio.
+  it("con `interactive={false}` nessun collegamento di superficie porta un href", () => {
+    const markup = renderToStaticMarkup(
+      <SiteTemplateHome config={config} palette={palette} previewId="builder" embedded interactive={false} />,
+    );
+    // L'unico indirizzo ammesso resta lo skip link, che punta dentro la stessa
+    // pagina ed e' un requisito di accessibilita', non una navigazione. Tutto il
+    // resto — dock, CTA, moduli — non deve avere un href da toccare.
+    const indirizzi = [...markup.matchAll(/href="([^"]*)"/gu)].map((trovato) => trovato[1]);
+    expect(indirizzi).toEqual(["#content-builder"]);
+  });
+
+  it("senza quella prop invece i collegamenti esistono: e' il caso normale", () => {
+    const markup = renderToStaticMarkup(
+      <SiteTemplateHome config={config} palette={palette} previewId="builder" embedded />,
+    );
+    expect(markup).toContain("href=");
   });
 });

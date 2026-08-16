@@ -32,7 +32,7 @@ test("le quattro palette sono accessibili e semanticamente pulite", async ({ pag
     const results = await new AxeBuilder({ page }).include(await shell.evaluate((element) => `[data-palette="${element.getAttribute("data-palette")}"]`)).analyze();
     expect(results.violations, `axe palette ${await shell.getAttribute("data-palette")}`).toEqual([]);
 
-    for (const selector of [".dock-center", ".player-shell button"]) {
+    for (const selector of ["[data-dock-center]", "[data-player-shell] button"]) {
       const ratio = await shell.locator(selector).evaluate((element) => {
         const style = getComputedStyle(element);
         return { foreground: style.color, background: style.backgroundColor };

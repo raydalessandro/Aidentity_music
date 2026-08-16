@@ -1,0 +1,209 @@
+.builder {
+  position: relative;
+  min-width: 0;
+}
+
+.stage {
+  position: sticky;
+  top: 0;
+  z-index: 0;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.viewport {
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.viewport::-webkit-scrollbar {
+  display: none;
+}
+
+/*
+ * Mentre si modifica, la preview è il fondale vivo e non un secondo pannello
+ * scrollabile sotto le dita. La preview stessa è esplicitamente non interattiva:
+ * nessun <a> può fingere una navigazione di superficie e smontare il player.
+ */
+.stage[data-editing="true"] .viewport {
+  overflow: hidden;
+}
+
+.sheet {
+  position: relative;
+  z-index: 50;
+  min-height: 62dvh;
+  margin-top: -62dvh;
+  overflow: clip;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--panel) 96%, transparent);
+  border-top: 1px solid var(--line);
+  border-radius: 24px 24px 0 0;
+  box-shadow: 0 -24px 70px rgba(0, 0, 0, .5);
+  backdrop-filter: blur(18px);
+}
+
+.sheet[data-expanded="false"] {
+  min-height: 92px;
+  margin-top: -92px;
+}
+
+.handle {
+  position: sticky;
+  top: 0;
+  z-index: 12;
+  width: 100%;
+  min-height: 76px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px 12px;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--panel) 96%, transparent);
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  backdrop-filter: blur(18px);
+}
+
+.grip {
+  width: 28px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--muted);
+}
+
+.handleCopy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.handleCopy strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.handleCopy small {
+  color: var(--muted);
+  font: 800 9px/1 ui-monospace, monospace;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+.handleCopy small[data-save-state="saving"],
+.handleCopy small[data-save-state="error"] {
+  color: var(--ink);
+}
+
+.handleAction {
+  color: var(--ink);
+  font: 900 9px/1 ui-monospace, monospace;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.body {
+  padding: 0 14px 28px;
+}
+
+.sheet[data-expanded="false"] .body {
+  display: none;
+}
+
+@media (max-width: 899px) {
+  .builder {
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+  }
+
+  :global([data-control-intro]) {
+    display: none !important;
+  }
+
+  .body > header {
+    display: none;
+  }
+
+  .body > nav[aria-label="Passi del wizard"] {
+    position: sticky;
+    top: 76px;
+    z-index: 11;
+    grid-template-columns: repeat(4, minmax(76px, 1fr)) !important;
+    gap: 1px !important;
+    margin: 0 -14px 14px !important;
+    overflow-x: auto;
+    background: var(--line) !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--line) !important;
+    scrollbar-width: none;
+  }
+
+  .body > nav[aria-label="Passi del wizard"]::-webkit-scrollbar {
+    display: none;
+  }
+
+  .body > nav[aria-label="Passi del wizard"] > button {
+    min-height: 58px !important;
+    padding: 9px 8px !important;
+    text-align: center !important;
+  }
+
+  .body > nav[aria-label="Passi del wizard"] > button small {
+    display: none !important;
+  }
+
+  .body > section {
+    border-right: 0 !important;
+    border-left: 0 !important;
+  }
+}
+
+@media (min-width: 900px) {
+  .builder {
+    display: grid;
+    grid-template-columns: minmax(390px, .9fr) minmax(430px, 1.1fr);
+    gap: 20px;
+    align-items: start;
+  }
+
+  .stage {
+    grid-column: 2;
+    grid-row: 1;
+    top: 18px;
+    height: calc(100dvh - 36px);
+    border: 1px solid var(--line);
+  }
+
+  .stage[data-editing="true"] .viewport {
+    overflow-y: auto;
+  }
+
+  .sheet,
+  .sheet[data-expanded="false"] {
+    grid-column: 1;
+    grid-row: 1;
+    min-height: 0;
+    margin-top: 0;
+    border: 1px solid var(--line);
+    border-radius: 0;
+  }
+
+  .sheet[data-expanded="false"] .body {
+    display: block;
+  }
+
+  .handle {
+    display: none;
+  }
+
+  .body {
+    padding: 0;
+  }
+}
