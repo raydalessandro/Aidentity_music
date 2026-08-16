@@ -9,6 +9,20 @@ button { font: inherit; }
 .preview-intro { max-width: 72rem; margin: 0 auto; color: #f2f5ec; width: 100%; }
 .preview-intro p { color: #c4ff30; font: 700 .75rem/1 ui-monospace, monospace; letter-spacing: .12em; }
 .preview-intro h2 { font-size: clamp(2rem, 6vw, 4.5rem); margin: .35rem 0 0; }
+.preview-intro .preview-nota { color: #cfd6c8; font: 400 1rem/1.5 Arial, Helvetica, sans-serif; letter-spacing: 0; margin: .75rem 0 0; }
+
+/* La porta d'ingresso. Stessi tre colori dello showroom: fondo, testo, acid. */
+.landing { max-width: 72rem; margin: 0 auto; padding: clamp(3rem, 10vw, 7rem) 0 1rem; color: #f2f5ec; width: 100%; }
+.landing-eyebrow { color: #c4ff30; font: 700 .75rem/1 ui-monospace, monospace; letter-spacing: .12em; margin: 0; }
+.landing h1 { font-size: clamp(2.25rem, 7vw, 5rem); line-height: 1.02; margin: .5rem 0 0; }
+.landing-claim { max-width: 44rem; color: #cfd6c8; font-size: clamp(1.05rem, 2.2vw, 1.35rem); line-height: 1.5; margin: 1.25rem 0 0; }
+.landing-azione { margin: 2rem 0 0; }
+.landing-cta { display: inline-block; padding: .95rem 2.25rem; color: #0b0d10; background: #c4ff30; border: 1px solid #c4ff30; font: 700 1rem/1 ui-monospace, monospace; letter-spacing: .08em; text-decoration: none; }
+.landing-cta:hover, .landing-cta:focus-visible { color: #c4ff30; background: #0b0d10; }
+.landing-nota { color: #b9c2b1; font-size: .9rem; margin: .85rem 0 0; }
+.landing-sezione { font-size: clamp(1.15rem, 2.5vw, 1.5rem); margin: 3.5rem 0 0; }
+.landing-passi { max-width: 44rem; color: #cfd6c8; font-size: 1.05rem; line-height: 1.6; margin: 1rem 0 0; padding-left: 1.25rem; }
+.landing-passi li + li { margin-top: .5rem; }
 
 .site-shell { --dock-height: 4.5rem; position: relative; isolation: isolate; overflow: hidden; min-height: min(48rem, calc(100svh - 4rem)); max-width: 72rem; margin: 0 auto; padding: 1.1rem 1.1rem calc(var(--dock-height) + 2rem); color: var(--ink); background: var(--paper); border: 1px solid var(--line); width: 100%; }
 .site-shell[data-grain="true"]::before { content: ""; position: absolute; inset: 0; z-index: -1; opacity: .14; background-image: radial-gradient(var(--ink) .45px, transparent .6px); background-size: 4px 4px; pointer-events: none; }

@@ -39,3 +39,28 @@ test("le quattro palette sono accessibili e semanticamente pulite", async ({ pag
     }
   }
 });
+
+/**
+ * La porta d'ingresso è la prima pagina che un artista vede, e finora `/` non era una pagina
+ * di prodotto: era il banco del filone A. Questo banco non misura l'estetica — misura che
+ * l'ingresso esista, sia raggiungibile da tastiera e non introduca barriere.
+ *
+ * Nota onesta: a differenza dei banchi unitari di questa PR, per questo non esiste una prova
+ * di mutazione, perche' la suite e2e richiede Docker e non e' eseguibile dove e' stato
+ * scritto. La CI e' la sua prima esecuzione.
+ */
+test("la radice ha un ingresso accessibile", async ({ page }) => {
+  await page.goto("/");
+
+  const landing = page.locator(".landing");
+  await expect(landing).toHaveCount(1);
+
+  const results = await new AxeBuilder({ page }).include(".landing").analyze();
+  expect(results.violations, "axe sulla landing").toEqual([]);
+
+  // L'ingresso deve essere raggiungibile da tastiera e portare all'accesso, non solo esistere.
+  const cta = landing.locator("a.landing-cta");
+  await expect(cta).toHaveAttribute("href", "/login?next=/app/wizard");
+  await cta.focus();
+  await expect(cta).toBeFocused();
+});
