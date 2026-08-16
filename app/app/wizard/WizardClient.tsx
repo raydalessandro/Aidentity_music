@@ -63,7 +63,6 @@ export default function WizardClient({ initial, userId }: { initial: WizardIniti
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
-  const [editorOpen, setEditorOpen] = useState(true);
   const firstConfig = useRef(true);
   const saveQueue = useRef<Promise<boolean>>(Promise.resolve(true));
   const saveRevision = useRef(0);
@@ -297,12 +296,12 @@ export default function WizardClient({ initial, userId }: { initial: WizardIniti
   }
 
   return (
-    <div className={liveStyles.builder} data-live-builder data-editing={editorOpen}>
+    <div className={liveStyles.builder} data-live-builder>
       {/*
-        La barra vive FUORI dal foglio, e non e' un dettaglio di impaginazione: il
-        tasto che apre il pannello non puo' stare dentro il pannello, altrimenti
-        chiuderlo nasconde anche il modo di riaprirlo. Resta visibile in entrambi
-        gli stati.
+        La barra vive FUORI dal foglio e porta il solo dato che non si puo'
+        perdere di vista mentre si scrive: se il salvataggio automatico e'
+        andato a buon fine. Su telefono l'intestazione del pannello e' nascosta,
+        quindi questa e' l'unica riga che lo dice.
       */}
       <header className={liveStyles.bar}>
         <span className={liveStyles.barCopy}>
@@ -317,17 +316,20 @@ export default function WizardClient({ initial, userId }: { initial: WizardIniti
                   : `/${site.slug}`}
           </small>
         </span>
-        <button
-          className={liveStyles.barToggle}
-          data-builder-toggle
-          type="button"
-          aria-expanded={editorOpen}
-          onClick={() => setEditorOpen((current) => !current)}
-        >
-          {editorOpen ? "Vedi sito" : "Modifica"}
-        </button>
       </header>
 
+      {/*
+        Il sito NON si guarda qui dentro. Si guarda con «Apri pagina completa»,
+        che lo apre a schermo pieno in una pagina sua: senza barre sopra, senza
+        controlli accanto, esattamente come lo vedra' chi riceve il link — e si
+        torna a lavorare chiudendo la scheda.
+
+        Quello che resta qui e' uno sfondo: la home vera, costruita dalla config
+        in memoria, dove si vede cambiare il nome, i colori, i caratteri e
+        comparire la hero. Non e' interattiva e non deve esserlo. Il foglio dei
+        controlli viene DOPO, nel flusso normale della pagina: non gli sta sopra,
+        quindi non puo' tagliare a meta' la hero come faceva il primo modello.
+      */}
       <section className={liveStyles.stage} data-builder-stage>
         <div className={liveStyles.viewport} data-builder-preview aria-label="Anteprima live del sito">
           <SiteTemplateHome

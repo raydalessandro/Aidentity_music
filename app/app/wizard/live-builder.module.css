@@ -1,12 +1,23 @@
 .builder {
   /*
-   * Due modi che si escludono, non un pannello che scorre sopra il sito.
-   * Il modello a sovrapposizione e' stato provato su telefono e non reggeva:
-   * il sito veniva disegnato a schermo intero e coperto dal basso, quindi la
-   * hero di Unica si vedeva a meta'. Qui o si guarda il sito, o si lavora, e
-   * la barra in cima commuta fra i due.
+   * Il sito si guarda altrove.
+   *
+   * Due modelli sono stati provati su telefono e hanno fallito per lo stesso
+   * motivo: cercavano di far convivere sullo stesso schermo il sito e i
+   * controlli. Il primo sovrapponeva un foglio scorrevole al sito, e la hero di
+   * Unica finiva tagliata a meta' del nome. Il secondo dava al foglio
+   * un'altezza propria con scorrimento interno, e la barra dei passi galleggiava
+   * dentro una finestrella. Il terzo — due modi che si escludono con un
+   * interruttore — funzionava, ma duplicava un comando che esiste gia': «Apri
+   * pagina completa» apre il sito in una pagina sua, a schermo pieno, senza
+   * nulla sopra, e si torna a lavorare chiudendo la scheda.
+   *
+   * Qui resta una cosa sola: la home come sfondo, dove si vedono cambiare nome,
+   * colori, caratteri e hero. Non scorre, non si tocca, e soprattutto non e'
+   * coperta da niente — il foglio dei controlli le sta DOPO nel flusso, non
+   * sopra. Nessuna sovrapposizione significa nessun mezzo elemento visibile.
    */
-  --bar: 56px;
+  --bar: 40px;
   position: relative;
   min-width: 0;
 }
@@ -20,7 +31,7 @@
   justify-content: space-between;
   gap: 12px;
   min-height: var(--bar);
-  padding: 8px 14px;
+  padding: 6px 14px;
   color: var(--ink);
   background: color-mix(in srgb, var(--panel) 96%, transparent);
   border-bottom: 1px solid var(--line);
@@ -48,30 +59,13 @@
   white-space: nowrap;
 }
 
-.barToggle {
-  flex: 0 0 auto;
-  /* Bersaglio comodo per il pollice: e' l'unico comando sempre presente. */
-  min-height: 44px;
-  padding: 0 18px;
-  color: var(--ink);
-  background: transparent;
-  border: 1px solid var(--line2);
-  font: 900 11px/1 ui-monospace, monospace;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-
-.barToggle:hover, .barToggle:focus-visible {
-  color: var(--ink);
-  border-color: var(--ink);
-}
-
 .stage {
-  position: sticky;
-  top: var(--bar);
-  z-index: 0;
-  height: calc(100dvh - var(--bar));
+  /*
+   * Altezza intera, perche' e' quella che il template si aspetta: la root di
+   * Unica e' `min-height: 100svh` con topbar e dock ancorati ai suoi estremi.
+   * Dare al palco meno di 100svh non «rimpicciolisce» il sito, lo taglia.
+   */
+  height: 100svh;
   overflow: hidden;
   background: var(--bg);
 }
@@ -87,24 +81,16 @@
   display: none;
 }
 
-/*
- * I due stati si escludono. Nessuno dei due nasconde l'altro a meta': o il sito
- * occupa lo schermo, o lo occupano i controlli, che scorrono con la pagina come
- * qualunque modulo — niente scorrimento dentro lo scorrimento.
- */
-.builder[data-editing="true"] .stage {
-  display: none;
-}
-
-.builder[data-editing="false"] .sheet {
-  display: none;
-}
-
 .sheet {
+  /*
+   * Nel flusso, dopo il palco. Niente `position: fixed`, niente margine
+   * negativo, niente translate: erano quelli a far finire il foglio sopra il
+   * sito, ed e' l'unico modo in cui il difetto puo' tornare.
+   */
   position: relative;
-  z-index: 50;
   color: var(--ink);
   background: var(--panel);
+  border-top: 1px solid var(--line);
 }
 
 .body {
@@ -127,7 +113,7 @@
 
   .body > nav[aria-label="Passi del wizard"] {
     position: sticky;
-    top: 76px;
+    top: var(--bar);
     z-index: 11;
     grid-template-columns: repeat(4, minmax(76px, 1fr)) !important;
     gap: 1px !important;
@@ -161,9 +147,10 @@
 
 @media (min-width: 900px) {
   /*
-   * Da 900px in su non c'e' nulla da commutare: il foglio e' una colonna accanto
-   * al sito e si vedono entrambi. La barra sparisce perche' il suo unico comando
-   * qui non serve, e i due stati che si escludono vengono annullati per nome.
+   * Da 900px in su il problema non esiste: il foglio e' una colonna accanto al
+   * sito e ci stanno entrambi. La barra sparisce perche' l'intestazione del
+   * pannello, nascosta su telefono, qui e' visibile e dice gia' lo stato del
+   * salvataggio.
    */
   .builder {
     display: grid;
@@ -176,16 +163,12 @@
     display: none;
   }
 
-  .builder[data-editing="true"] .stage,
-  .builder[data-editing="false"] .sheet {
-    display: block;
-  }
-
   .stage {
+    position: sticky;
     grid-column: 2;
     grid-row: 1;
     top: 18px;
-    height: calc(100dvh - 36px);
+    height: calc(100svh - 36px);
     border: 1px solid var(--line);
   }
 
