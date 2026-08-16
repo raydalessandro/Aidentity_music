@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
+import { LANDING_ENTRY_HREF } from "../components/landing/entry";
+
 type Rgb = readonly [number, number, number];
 
 function parseRgb(value: string): Rgb {
@@ -60,7 +62,9 @@ test("la radice ha un ingresso accessibile", async ({ page }) => {
 
   // L'ingresso deve essere raggiungibile da tastiera e portare all'accesso, non solo esistere.
   const cta = landing.locator("a.landing-cta");
-  await expect(cta).toHaveAttribute("href", "/login?next=/app/wizard");
+  // L'indirizzo si legge dalla sorgente unica, non si ricopia: una copia qui e
+  // una nel componente e' come e' nato questo rosso.
+  await expect(cta).toHaveAttribute("href", LANDING_ENTRY_HREF);
   await cta.focus();
   await expect(cta).toBeFocused();
 });

@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { LANDING_ENTRY_HREF } from "./entry";
+
 /**
  * La porta d'ingresso.
  *
@@ -11,9 +13,6 @@ import Link from "next/link";
  * Design essenziale per scelta: qui si stabilisce che la radice promette qualcosa e offre un
  * ingresso. La rifinitura è lavoro a sé, a prodotto online.
  */
-
-/** L'ingresso porta al wizard, non alla radice: chi accede sta venendo a costruire. */
-export const LANDING_ENTRY_HREF = "/login?next=/app/wizard";
 
 export function Landing() {
   return (
@@ -41,3 +40,5 @@ export function Landing() {
     </section>
   );
 }
+
+export { LANDING_ENTRY_HREF };

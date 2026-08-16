@@ -1,7 +1,13 @@
 * { box-sizing: border-box; }
 
 html { background: #0b0d10; }
-body { margin: 0; font-family: Arial, Helvetica, sans-serif; }
+/* Il `color` non e' cosmetica: senza, il testo eredita il nero di default del
+   browser sopra un fondo quasi nero, e ogni pagina che non porta uno stile
+   proprio diventa illeggibile. E' successo davvero su `/login`, dove restavano
+   visibili soltanto il campo di input e il pulsante — compreso il messaggio che
+   spiegava l'errore. Le superfici che hanno una palette propria continuano a
+   sovrascriverlo. */
+body { margin: 0; color: #f2f5ec; font-family: Arial, Helvetica, sans-serif; }
 a { color: inherit; }
 button { font: inherit; }
 
@@ -23,6 +29,27 @@ button { font: inherit; }
 .landing-sezione { font-size: clamp(1.15rem, 2.5vw, 1.5rem); margin: 3.5rem 0 0; }
 .landing-passi { max-width: 44rem; color: #cfd6c8; font-size: 1.05rem; line-height: 1.6; margin: 1rem 0 0; padding-left: 1.25rem; }
 .landing-passi li + li { margin-top: .5rem; }
+
+/* Accesso e registrazione. Stessi tre colori della landing. */
+.auth { max-width: 26rem; margin: 0 auto; padding: clamp(3rem, 9vw, 6rem) 1.25rem 4rem; }
+.auth-eyebrow { color: #c4ff30; font: 700 .75rem/1 ui-monospace, monospace; letter-spacing: .12em; margin: 0; }
+.auth-titolo { max-width: none; margin: .5rem 0 0; font-size: clamp(1.9rem, 6vw, 2.8rem); font-weight: 900; line-height: 1.05; letter-spacing: -.03em; }
+.auth-claim { color: #cfd6c8; line-height: 1.5; margin: .9rem 0 0; }
+.auth-form { display: grid; gap: .4rem; margin: 2rem 0 0; }
+.auth-form label { color: #cfd6c8; font-size: .82rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.auth-form input { padding: .8rem .9rem; color: #f2f5ec; background: #14181d; border: 1px solid #68737f; font: inherit; }
+.auth-form input:focus-visible { border-color: #c4ff30; outline: 2px solid #c4ff30; outline-offset: 1px; }
+.auth-form label + input { margin-bottom: .8rem; }
+.auth-nota { color: #b9c2b1; font-size: .85rem; margin: -.5rem 0 .8rem; }
+.auth-cta { padding: .9rem 1.5rem; color: #0b0d10; background: #c4ff30; border: 1px solid #c4ff30; font: 700 1rem/1 ui-monospace, monospace; letter-spacing: .08em; }
+.auth-cta:hover:not(:disabled), .auth-cta:focus-visible { color: #c4ff30; background: #0b0d10; }
+.auth-cta:disabled { opacity: .6; }
+.auth-esito { min-height: 1.4rem; color: #cfd6c8; font-size: .92rem; line-height: 1.4; margin: .9rem 0 0; }
+/* Il rosso non e' l'informazione: il testo dice gia' cosa non va. E' un rinforzo,
+   e resta sopra 4.5:1 sul fondo. */
+.auth-esito-errore { color: #ff9d8a; }
+.auth-alternativa { color: #b9c2b1; font-size: .92rem; margin: 2rem 0 0; }
+.auth-alternativa a { color: #c4ff30; }
 
 .site-shell { --dock-height: 4.5rem; position: relative; isolation: isolate; overflow: hidden; min-height: min(48rem, calc(100svh - 4rem)); max-width: 72rem; margin: 0 auto; padding: 1.1rem 1.1rem calc(var(--dock-height) + 2rem); color: var(--ink); background: var(--paper); border: 1px solid var(--line); width: 100%; }
 .site-shell[data-grain="true"]::before { content: ""; position: absolute; inset: 0; z-index: -1; opacity: .14; background-image: radial-gradient(var(--ink) .45px, transparent .6px); background-size: 4px 4px; pointer-events: none; }

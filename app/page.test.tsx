@@ -21,7 +21,7 @@ describe("la radice offre un ingresso", () => {
   });
 
   it("l'ingresso porta al wizard e non alla radice: chi accede viene a costruire", () => {
-    expect(LANDING_ENTRY_HREF).toBe("/login?next=/app/wizard");
+    expect(LANDING_ENTRY_HREF).toBe("/signup?next=/app/wizard");
     expect(markup).toContain("next=/app/wizard");
   });
 
