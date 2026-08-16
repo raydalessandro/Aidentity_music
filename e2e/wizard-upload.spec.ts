@@ -4,14 +4,7 @@ import { createServerClient } from "@supabase/ssr";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { expect, test } from "@playwright/test";
 
-/**
- * Saldatura reale C -> media -> Supabase Storage.
- *
- * Il filone media porta nel job E2E URL, anon key e service-role key effimere.
- * Qui C usa quello stack vero per provare il punto che un pgTAP sul solo DB non
- * può dimostrare: la Storage API attraversa davvero le policy owner del wizard,
- * compreso il metadata `size` valorizzato dall'upload.
- */
+/** Saldatura reale wizard -> Storage -> finalizzazione -> quote. */
 test.describe.configure({ mode: "serial" });
 
 const JPEG_1X1 = Buffer.from(
@@ -19,21 +12,20 @@ const JPEG_1X1 = Buffer.from(
   "base64",
 );
 
+/** Piccolo payload con header ID3. Non serve decodificarlo: qui proviamo il lifecycle upload. */
+const MP3_SAMPLE = Buffer.from(
+  "4944330400000000000f544954320000000500000054455354",
+  "hex",
+);
+
 let service: SupabaseClient;
 let owner: SupabaseClient;
 let userId = "";
 let siteId = "";
-let email = "";
 let ownerTokens: { access_token: string; refresh_token: string } | null = null;
-const paths: string[] = [];
+const assetPaths: string[] = [];
+const trackPaths: string[] = [];
 
-/**
- * Cookie di sessione per parlare con le route di Next come l'owner loggato.
- *
- * Il formato lo produce `@supabase/ssr`, la stessa libreria che la route usa per
- * rileggerlo: nome, chunking e codifica non sono indovinati qui, cosi' il test
- * non si rompe se la libreria cambia il proprio schema.
- */
 async function ownerCookieHeader(): Promise<string> {
   if (!ownerTokens) throw new Error("e2e wizard: sessione owner assente");
   const jar: { name: string; value: string }[] = [];
@@ -65,7 +57,7 @@ function required(name: string): string {
   return value;
 }
 
-async function reserve(bytes: number): Promise<{ id: string; path: string }> {
+async function reserveAsset(bytes: number): Promise<{ id: string; path: string }> {
   const { data, error } = await service.rpc("wizard_reserve_upload", {
     target_site: siteId,
     actor: userId,
@@ -89,14 +81,10 @@ test.beforeAll(async () => {
   owner = createClient(url, anon, { auth: { persistSession: false } });
 
   const suffix = randomUUID().replaceAll("-", "");
-  email = `wizard-${suffix}@example.test`;
+  const email = `wizard-${suffix}@example.test`;
   const password = `Wizard-${suffix}-A1!`;
 
-  const created = await service.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-  });
+  const created = await service.auth.admin.createUser({ email, password, email_confirm: true });
   if (created.error || !created.data.user) {
     throw new Error(`create owner wizard e2e: ${created.error?.message ?? "utente assente"}`);
   }
@@ -118,16 +106,15 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
-  if (service && paths.length > 0) {
-    await service.storage.from("site-assets").remove(paths);
-  }
+  if (service && assetPaths.length > 0) await service.storage.from("site-assets").remove(assetPaths);
+  if (service && trackPaths.length > 0) await service.storage.from("site-tracks").remove(trackPaths);
   if (service && siteId) await service.from("sites").delete().eq("id", siteId);
   if (service && userId) await service.auth.admin.deleteUser(userId);
 });
 
-test("reservation -> upload owner -> consume attraversa Storage RLS e aggiorna usage", async () => {
-  const ticket = await reserve(JPEG_1X1.byteLength);
-  paths.push(ticket.path);
+test("immagine: reservation -> upload owner -> consume attraversa Storage RLS e aggiorna usage", async () => {
+  const ticket = await reserveAsset(JPEG_1X1.byteLength);
+  assetPaths.push(ticket.path);
 
   const uploaded = await owner.storage.from("site-assets").upload(ticket.path, JPEG_1X1, {
     contentType: "image/jpeg",
@@ -146,69 +133,119 @@ test("reservation -> upload owner -> consume attraversa Storage RLS e aggiorna u
   expect(completed.error).toBeNull();
   expect(typeof completed.data).toBe("string");
 
-  const reservation = await service
-    .from("site_upload_reservations")
-    .select("status")
-    .eq("id", ticket.id)
-    .single();
+  const reservation = await service.from("site_upload_reservations").select("status").eq("id", ticket.id).single();
   expect(reservation.error).toBeNull();
   expect(reservation.data?.status).toBe("consumed");
 
   const usage = await service
     .from("site_usage")
-    .select("used_bytes,used_photo_slots,reserved_bytes,reserved_photo_slots")
+    .select("used_bytes,used_photo_slots,used_upload_tracks,reserved_bytes,reserved_photo_slots,reserved_upload_tracks")
     .eq("site_id", siteId)
     .single();
   expect(usage.error).toBeNull();
   expect(usage.data).toMatchObject({
     used_bytes: JPEG_1X1.byteLength,
     used_photo_slots: 1,
+    used_upload_tracks: 0,
     reserved_bytes: 0,
     reserved_photo_slots: 0,
+    reserved_upload_tracks: 0,
   });
 });
 
-/**
- * La garanzia sui byte non e' sparita, ha cambiato livello.
- *
- * Prima viveva nella policy Storage, che confrontava `metadata->>'size'` con i
- * byte prenotati. Quel confronto non poteva funzionare: Supabase valuta la RLS
- * durante `prepareUpload`, prima che i byte arrivino, e in quel momento
- * `metadata` contiene solo `mimetype` e `contentLength` -- `size` non esiste
- * ancora. La condizione negava ogni upload, quindi questa prova sarebbe passata
- * comunque, ma perche' TUTTO veniva negato: un verde che non dimostrava niente.
- *
- * Oggi l'oggetto entra nel bucket e a rifiutarlo e' la finalizzazione:
- * `assertStoredSize` in `lib/wizard/upload-server.ts` interroga l'oggetto con
- * `info()` e confronta la dimensione REALMENTE memorizzata con i byte attesi.
- * E' un controllo piu' forte di quello perduto, perche' la policy avrebbe potuto
- * vedere solo il `contentLength` dichiarato dal client.
- *
- * Il test passa dalla route HTTP, non dalla RPC: la RPC `wizard_complete_asset_upload`
- * confronta la prenotazione con i byte DICHIARATI, che qui coincidono, quindi da
- * sola accetterebbe. L'unica cosa che distingue i 631 byte scritti dai 632
- * prenotati e' il controllo lato server, ed e' quello che questo test misura.
- */
-test("byte diversi dalla prenotazione entrano nello Storage ma la finalizzazione li rifiuta e la quota torna disponibile", async ({ request }) => {
-  const declaredBytes = JPEG_1X1.byteLength + 1;
-  const ticket = await reserve(declaredBytes);
-  paths.push(ticket.path);
+test("traccia: reserve HTTP -> upload owner -> finalize HTTP crea la track e consuma uno slot", async ({ request }) => {
+  const cookie = await ownerCookieHeader();
+  const reserve = await request.post("/api/wizard/media/track", {
+    headers: { Cookie: cookie, "Content-Type": "application/json" },
+    data: {
+      action: "reserve",
+      siteId,
+      title: "Track upload e2e",
+      byteSize: MP3_SAMPLE.byteLength,
+      mimeType: "audio/mpeg",
+    },
+  });
+  const reserveBody = await reserve.text();
+  expect(reserve.status(), reserveBody).toBe(201);
+  const ticket = JSON.parse(reserveBody) as { reservationId: string; path: string; bucket: string };
+  expect(ticket.bucket).toBe("site-tracks");
+  trackPaths.push(ticket.path);
 
-  // 1. L'upload ora entra: la policy governa bucket, owner, prenotazione attiva
-  //    e path, non la dimensione.
+  const uploaded = await owner.storage.from("site-tracks").upload(ticket.path, MP3_SAMPLE, {
+    contentType: "audio/mpeg",
+    upsert: false,
+  });
+  expect(uploaded.error).toBeNull();
+
+  const finalize = await request.post("/api/wizard/media/track", {
+    headers: { Cookie: cookie, "Content-Type": "application/json" },
+    data: {
+      action: "finalize",
+      siteId,
+      reservationId: ticket.reservationId,
+      title: "Track upload e2e",
+      byteSize: MP3_SAMPLE.byteLength,
+      mimeType: "audio/mpeg",
+    },
+  });
+  const finalizeBody = await finalize.text();
+  expect(finalize.status(), finalizeBody).toBe(201);
+  const created = JSON.parse(finalizeBody) as { id?: string };
+  expect(created.id).toBeTruthy();
+
+  const track = await service
+    .from("site_tracks")
+    .select("title,source,mime_type,byte_size")
+    .eq("id", created.id)
+    .single();
+  expect(track.error).toBeNull();
+  expect(track.data).toMatchObject({
+    title: "Track upload e2e",
+    source: "upload",
+    mime_type: "audio/mpeg",
+    byte_size: MP3_SAMPLE.byteLength,
+  });
+
+  const usage = await service
+    .from("site_usage")
+    .select("used_bytes,used_photo_slots,used_upload_tracks,reserved_bytes,reserved_photo_slots,reserved_upload_tracks")
+    .eq("site_id", siteId)
+    .single();
+  expect(usage.error).toBeNull();
+  expect(usage.data).toMatchObject({
+    used_bytes: JPEG_1X1.byteLength + MP3_SAMPLE.byteLength,
+    used_photo_slots: 1,
+    used_upload_tracks: 1,
+    reserved_bytes: 0,
+    reserved_photo_slots: 0,
+    reserved_upload_tracks: 0,
+  });
+});
+
+/** La dimensione vera dello Storage vince sui byte dichiarati dal client. */
+test("byte diversi dalla prenotazione vengono rifiutati in finalize e la quota torna disponibile", async ({ request }) => {
+  const declaredBytes = JPEG_1X1.byteLength + 1;
+  const ticket = await reserveAsset(declaredBytes);
+  assetPaths.push(ticket.path);
+
+  // 1. L'oggetto ENTRA. La policy Storage governa bucket, owner, prenotazione attiva e
+  //    path — non la dimensione, che alla valutazione della RLS non esiste ancora:
+  //    Supabase valuta in `prepareUpload`, prima che i byte arrivino. Una versione
+  //    precedente di questo banco pretendeva che fosse la policy a rifiutare, e sarebbe
+  //    passata soltanto perché quella policy negava *tutto*: un verde che non dimostrava
+  //    niente. Vedi TODO.md §2.
   const uploaded = await owner.storage.from("site-assets").upload(ticket.path, JPEG_1X1, {
     contentType: "image/jpeg",
     upsert: false,
   });
-  expect(uploaded.error, "la policy non giudica piu' la dimensione: l'oggetto entra").toBeNull();
+  expect(uploaded.error, "la policy non giudica la dimensione: l'oggetto entra").toBeNull();
 
   const stored = await service.storage.from("site-assets").info(ticket.path);
   expect(stored.data?.size, "nel bucket ci sono i byte veri, non quelli prenotati")
     .toBe(JPEG_1X1.byteLength);
 
-  // 2. La finalizzazione, dalla route reale con la sessione dell'owner. Dichiara
-  //    i byte prenotati: e' il caso in cui solo la dimensione memorizzata
-  //    smaschera la differenza.
+  // 2. La garanzia vive nella finalizzazione, che confronta i byte REALMENTE memorizzati
+  //    con quelli prenotati: `stored-object-mismatch`, che la route traduce in 409.
   const finalize = await request.post("/api/wizard/media/asset", {
     headers: { Cookie: await ownerCookieHeader(), "Content-Type": "application/json" },
     data: {
@@ -223,12 +260,9 @@ test("byte diversi dalla prenotazione entrano nello Storage ma la finalizzazione
   expect(finalize.status(), "stored-object-mismatch diventa 409").toBe(409);
   expect(await finalize.json()).toMatchObject({ error: "file trasferito non coerente" });
 
-  // 3. La prenotazione NON e' stata consumata e la quota e' tornata libera.
-  const reservation = await service
-    .from("site_upload_reservations")
-    .select("status")
-    .eq("id", ticket.id)
-    .single();
+  // 3. La prenotazione non è stata consumata e la quota è tornata libera: il rifiuto non
+  //    deve costare byte all'artista.
+  const reservation = await service.from("site_upload_reservations").select("status").eq("id", ticket.id).single();
   expect(reservation.error).toBeNull();
   expect(reservation.data?.status, "una finalize rifiutata non consuma la prenotazione")
     .not.toBe("consumed");
@@ -236,18 +270,19 @@ test("byte diversi dalla prenotazione entrano nello Storage ma la finalizzazione
 
   const usage = await service
     .from("site_usage")
-    .select("used_bytes,used_photo_slots,reserved_bytes,reserved_photo_slots")
+    .select("used_bytes,used_photo_slots,used_upload_tracks,reserved_bytes,reserved_photo_slots,reserved_upload_tracks")
     .eq("site_id", siteId)
     .single();
   expect(usage.error).toBeNull();
   expect(usage.data).toMatchObject({
-    used_bytes: JPEG_1X1.byteLength,
+    used_bytes: JPEG_1X1.byteLength + MP3_SAMPLE.byteLength,
     used_photo_slots: 1,
+    used_upload_tracks: 1,
     reserved_bytes: 0,
     reserved_photo_slots: 0,
+    reserved_upload_tracks: 0,
   });
 
-  // 4. Il rilascio ha anche ripulito l'oggetto rimasto nel bucket.
   const afterRelease = await service.storage.from("site-assets").info(ticket.path);
-  expect(afterRelease.data, "l'oggetto orfano viene rimosso dopo il release").toBeNull();
+  expect(afterRelease.data).toBeNull();
 });

@@ -1,3 +1,4 @@
+import { ribbonVisuals } from "@/lib/site-visuals";
 import { notFound, redirect } from "next/navigation";
 
 import { EpkSurface } from "@/components/epk/EpkSurface";
@@ -40,6 +41,14 @@ export default async function OwnerPreviewPage({ params }: { params: Promise<{ s
   const heroSrc = configResult.data?.hero_asset_id
     ? `/api/wizard/preview-asset/${configResult.data.hero_asset_id}`
     : null;
+  // Stessa selezione del sito pubblicato, presa dallo stesso modulo: se qui comparisse un
+  // visual che la` non compare, l'anteprima mentirebbe proprio su cio` per cui esiste.
+  const visuals = ribbonVisuals(
+    assets.data ?? [],
+    posts.data ?? [],
+    (asset) => `/api/wizard/preview-asset/${asset.id}`,
+    (asset) => `Visual draft ${asset.id.slice(0, 8)}`,
+  );
 
   return (
     <SiteTemplateHome
@@ -47,6 +56,7 @@ export default async function OwnerPreviewPage({ params }: { params: Promise<{ s
       palette={paletteForDraft(parsed.data)}
       previewId={previewId}
       heroSrc={heroSrc}
+      visuals={visuals}
     >
       <DraftContentPreview
         config={parsed.data}

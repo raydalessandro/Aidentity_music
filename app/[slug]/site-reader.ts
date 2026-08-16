@@ -9,9 +9,11 @@
 // I metodi sono per superficie, non per tabella: il renderer chiede "cosa serve a LISTEN",
 // non "fai una select su site_tracks". Quante query servano è un problema dell'adattatore.
 //
-// STOP (b): le sole proiezioni pubbliche esistenti sono `public_sites` e `public_tracks`
-// (migrazione PR-0, righe 262-263). Ogni forma marcata MANCANTE richiede una vista che oggi
-// non esiste; crearla non è nel perimetro del filone D.
+// Le forme qui sotto erano marcate MANCANTE quando le sole proiezioni pubbliche erano
+// `public_sites` e `public_tracks`. Oggi esistono tutte — `public_assets`, `public_posts`,
+// `public_links`, `public_press`, `public_dates`, `public_metrics`, `public_contacts` — e
+// l'adattatore le legge davvero. Le note sono state riscritte perché una porta che dichiara
+// mancante ciò che esiste è peggio di una porta non documentata: si crede.
 
 /** Colonne di `public_sites`. `config` è jsonb non fidato: passa da `siteConfigSchema`. */
 export type PublicSiteRow = {
@@ -19,7 +21,10 @@ export type PublicSiteRow = {
   readonly slug: string;
   readonly config: unknown;
   readonly hero_asset_id: string | null;
-  /** MANCANTE: l'hero risolto in immagine pubblica. Vedi `PublicAssetRow`. */
+  /**
+   * L'hero risolto in immagine: opzionale perché la pagina lo deriva da `hero_asset_id` con
+   * `mediaUrl`, senza che la proiezione porti nulla di privato.
+   */
   readonly hero?: PublicAssetRow | null;
 };
 
@@ -39,16 +44,18 @@ export type PublicTrackRow = {
   readonly embed_url: string | null;
   readonly sort_order: number;
   /**
-   * MANCANTE in `public_tracks`: una traccia `upload` non ha oggi alcun riferimento audio
-   * pubblico, e il path privato dello Storage non può entrare in una proiezione anonima.
-   * Finché il campo non esiste il read model scarta gli upload con `upload-source-missing`
-   * invece di rendere un player senza sorgente.
+   * Non è una colonna di `public_tracks` e non deve diventarlo: il path privato dello
+   * Storage non entra in una proiezione anonima. Lo **deriva l'adattatore** con `mediaUrl`,
+   * che indirizza la route media — l'unica strada autorizzata verso i byte. Se manca, il
+   * read model scarta l'upload con `upload-source-missing` invece di rendere un player
+   * senza sorgente.
    */
   readonly audio_url?: string | null;
 };
 
 /**
- * MANCANTE: proiezione pubblica di `site_assets`.
+ * `public_assets`: id, site_id, kind, sort_order — e nient'altro, con `published` e
+ * `purged_at is null` imposti dalla vista.
  * Pubbliche: `id`, `kind`, `sort_order` e un riferimento pubblico al file.
  * Interne da escludere: `storage_path`, `byte_size`, `mime_type`, `purged_at`
  * (che diventa un filtro `purged_at is null`, non una colonna).
@@ -63,7 +70,7 @@ export type PublicAssetRow = {
   readonly sort_order: number;
 };
 
-/** MANCANTE: proiezione pubblica di `site_posts`. */
+/** Proiezione `public_posts`, letta dall'adattatore. */
 export type PublicPostRow = {
   readonly id: string;
   readonly site_id: string;
@@ -75,7 +82,7 @@ export type PublicPostRow = {
   readonly sort_order: number;
 };
 
-/** MANCANTE: proiezione pubblica di `site_links`. */
+/** Proiezione `public_links`, letta dall'adattatore. */
 export type PublicLinkRow = {
   readonly id: string;
   readonly site_id: string;
@@ -90,7 +97,7 @@ export type PublicLinkRow = {
   readonly sort_order: number;
 };
 
-/** MANCANTE: proiezione pubblica di `site_press`. */
+/** Proiezione `public_press`, letta dall'adattatore. */
 export type PublicPressRow = {
   readonly id: string;
   readonly site_id: string;
@@ -101,7 +108,7 @@ export type PublicPressRow = {
   readonly sort_order: number;
 };
 
-/** MANCANTE: proiezione pubblica di `site_dates`. */
+/** Proiezione `public_dates`, letta dall'adattatore. */
 export type PublicDateRow = {
   readonly id: string;
   readonly site_id: string;
@@ -112,7 +119,7 @@ export type PublicDateRow = {
   readonly sort_order: number;
 };
 
-/** MANCANTE: proiezione pubblica di `site_metrics`. */
+/** Proiezione `public_metrics`, letta dall'adattatore. */
 export type PublicMetricRow = {
   readonly id: string;
   readonly site_id: string;
@@ -122,7 +129,7 @@ export type PublicMetricRow = {
 };
 
 /**
- * MANCANTE: proiezione pubblica di `site_contacts`.
+ * Proiezione `public_contacts`, letta dall'adattatore.
  * La vista deve filtrare `consent_confirmed_at is not null` ed escludere sia il timestamp
  * sia `consent_confirmed_by`: il consenso è un dato interno e la sua assenza è un divieto.
  */
@@ -140,14 +147,14 @@ export type ListenRecords = {
   readonly tracks: readonly PublicTrackRow[];
 };
 
-/** Materiale della superficie FEED. MANCANTE per intero. */
+/** Materiale della superficie FEED: post pubblici e i soli asset che quei post referenziano. */
 export type FeedRecords = {
   readonly posts: readonly PublicPostRow[];
   /** Asset referenziati dai post, già risolti in URL pubblici. */
   readonly assets: readonly PublicAssetRow[];
 };
 
-/** Materiale della superficie EPK. Bio e identità arrivano dalla config, il resto è MANCANTE. */
+/** Materiale della superficie EPK: bio e identità dalla config, il resto dalle proiezioni. */
 export type EpkRecords = {
   readonly links: readonly PublicLinkRow[];
   readonly press: readonly PublicPressRow[];

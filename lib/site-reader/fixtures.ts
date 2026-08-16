@@ -1,33 +1,13 @@
-// Banco di prova dell'adattatore: un PostgREST in memoria, non un mock che dice sempre sì.
-// Non è codice di prodotto — nessuna route lo importa.
-//
-// Il doppio **imita le viste**, non le tabelle: espone soltanto le righe dei siti
-// `published`, esattamente come fanno `public_sites`, `public_tracks` e le proiezioni della
-// migrazione 20260815170304. Un sito in bozza sta nella fixture ma non è raggiungibile da
-// nessuna query, perché è così che si comporta il database.
-//
-// Applica davvero i parametri della `RowQuery` — filtri, ordinamento, limite, proiezione
-// delle colonne — così un adattatore che li ignorasse produrrebbe risultati sbagliati e non
-// risultati identici. Un doppio che restituisce sempre la stessa lista non prova niente:
-// questo è costruito perché i test possano diventare rossi.
-//
-// Due severità volute:
-//   - chiedere una colonna che la fixture non ha è un errore, come lo sarebbe un 400 di
-//     PostgREST su una colonna inesistente;
-//   - chiedere una relazione non modellata (`public_assets`, `public_site_meta`) è un
-//     errore: nessuna superficie deve interrogarle finché non hanno un URL pubblico.
-
 import type { PublicRowSource, RowQuery } from "./row-source";
 
 export type FixtureRow = Readonly<Record<string, unknown>>;
-
 export type PublicationStatus = "draft" | "pending_review" | "published" | "suspended";
 
 export type FixtureSite = {
   readonly publicationStatus: PublicationStatus;
-  /** Colonne di `public_sites` per questo sito. */
   readonly site: FixtureRow;
   readonly tracks: readonly FixtureRow[];
+  readonly assets: readonly FixtureRow[];
   readonly posts: readonly FixtureRow[];
   readonly links: readonly FixtureRow[];
   readonly press: readonly FixtureRow[];
@@ -41,11 +21,6 @@ const MIRIAM_ID = "99999999-9999-9999-9999-999999999999";
 const DRAFT_ID = "55555555-5555-5555-5555-555555555555";
 const REVIEW_ID = "88888888-8888-8888-8888-888888888888";
 
-/**
- * Gli identificativi del seed non sono UUID v4: `22222222-…` non rispetta versione e
- * variante RFC 9562. Restano qui apposta — il bordo deve accettarli (`z.guid()`), e se
- * qualcuno tornasse a `z.uuid()` questa fixture lo farebbe fallire subito.
- */
 export const FIXTURE_IDS = {
   nvllClick: NVLL_CLICK_ID,
   miriam: MIRIAM_ID,
@@ -60,7 +35,6 @@ export const FIXTURE_SLUGS = {
   review: "owner-c-review",
 } as const;
 
-/** Config minima e pubblicabile: il giudizio sul contenuto è di `siteConfigSchema`. */
 function config(name: string, handle: string): FixtureRow {
   return {
     version: 1,
@@ -98,6 +72,7 @@ function config(name: string, handle: string): FixtureRow {
 
 const EMPTY_CONTENT = {
   tracks: [],
+  assets: [],
   posts: [],
   links: [],
   press: [],
@@ -106,11 +81,6 @@ const EMPTY_CONTENT = {
   contacts: [],
 } as const;
 
-/**
- * Le collezioni sono scritte **fuori ordine** di proposito: se l'adattatore non chiedesse
- * `order by sort_order`, l'ordine reso sarebbe quello di inserimento e i test se ne
- * accorgerebbero.
- */
 export function fixtureSites(): readonly FixtureSite[] {
   return [
     {
@@ -121,6 +91,26 @@ export function fixtureSites(): readonly FixtureSite[] {
         config: config("NVLL CLICK", "nvll-click"),
         hero_asset_id: "33333333-3333-3333-3333-333333333333",
       },
+      assets: [
+        {
+          id: "66666666-6666-6666-6666-666666666666",
+          site_id: NVLL_CLICK_ID,
+          kind: "photo_hi",
+          sort_order: 2,
+        },
+        {
+          id: "44444444-4444-4444-4444-444444444444",
+          site_id: NVLL_CLICK_ID,
+          kind: "merch",
+          sort_order: 1,
+        },
+        {
+          id: "33333333-3333-3333-3333-333333333333",
+          site_id: NVLL_CLICK_ID,
+          kind: "visual",
+          sort_order: 0,
+        },
+      ],
       tracks: [
         {
           id: "aaaa0002-0000-0000-0000-000000000000",
@@ -232,7 +222,6 @@ export function fixtureSites(): readonly FixtureSite[] {
       ],
     },
     {
-      // Secondo sito pubblicato: serve a dimostrare che l'adattatore usa i parametri.
       publicationStatus: "published",
       site: {
         id: MIRIAM_ID,
@@ -265,7 +254,6 @@ export function fixtureSites(): readonly FixtureSite[] {
       ],
     },
     {
-      // Bozza: presente nel database, invisibile a `anon`. Non deve risolvere per nessuna via.
       publicationStatus: "draft",
       site: {
         id: DRAFT_ID,
@@ -298,9 +286,9 @@ export function fixtureSites(): readonly FixtureSite[] {
   ];
 }
 
-/** Collezione della fixture che corrisponde a ciascuna proiezione. */
 const RELATION_COLLECTION = {
   public_tracks: "tracks",
+  public_assets: "assets",
   public_posts: "posts",
   public_links: "links",
   public_press: "press",
@@ -321,7 +309,6 @@ function compare(left: unknown, right: unknown): number {
 }
 
 export class FakePublicDatabase implements PublicRowSource {
-  /** Ogni query passata dall'adattatore, nell'ordine in cui è stata fatta. */
   readonly queries: RowQuery[] = [];
   private readonly sites: readonly FixtureSite[];
 
@@ -329,55 +316,31 @@ export class FakePublicDatabase implements PublicRowSource {
     this.sites = sites;
   }
 
-  /** Tutti gli slug della fixture, pubblicati e non: serve a provare che il filtro esiste. */
-  allSlugs(): readonly string[] {
-    return this.sites.map((site) => String(site.site.slug));
-  }
-
-  relationsQueried(): readonly string[] {
-    return this.queries.map((query) => query.relation);
-  }
-
-  private published(): readonly FixtureSite[] {
-    return this.sites.filter((site) => site.publicationStatus === "published");
-  }
+  allSlugs(): readonly string[] { return this.sites.map((site) => String(site.site.slug)); }
+  relationsQueried(): readonly string[] { return this.queries.map((query) => query.relation); }
+  private published(): readonly FixtureSite[] { return this.sites.filter((site) => site.publicationStatus === "published"); }
 
   private rowsFor(relation: string): readonly FixtureRow[] {
     if (relation === "public_sites") return this.published().map((site) => site.site);
-    if (isModelled(relation)) {
-      return this.published().flatMap((site) => site[RELATION_COLLECTION[relation]]);
-    }
-    throw new Error(
-      `La fixture non modella ${relation}: nessuna superficie deve interrogarla oggi.`,
-    );
+    if (isModelled(relation)) return this.published().flatMap((site) => site[RELATION_COLLECTION[relation]]);
+    throw new Error(`La fixture non modella ${relation}.`);
   }
 
   async fetchRows(query: RowQuery): Promise<readonly unknown[]> {
     this.queries.push(query);
-
     let rows = [...this.rowsFor(query.relation)];
-
-    for (const filter of query.filters ?? []) {
-      rows = rows.filter((row) => String(row[filter.column]) === filter.value);
-    }
-
+    for (const filter of query.filters ?? []) rows = rows.filter((row) => String(row[filter.column]) === filter.value);
     for (const order of [...(query.order ?? [])].reverse()) {
       rows.sort((left, right) => {
         const verdict = compare(left[order.column], right[order.column]);
         return order.ascending ? verdict : -verdict;
       });
     }
-
     if (query.limit !== undefined) rows = rows.slice(0, query.limit);
-
-    // Proiezione: come PostgREST, torna soltanto ciò che è stato chiesto. Una colonna
-    // inesistente è un errore, non un `undefined` che scivola dentro il dominio.
     return rows.map((row) => {
       const projected: Record<string, unknown> = {};
       for (const column of query.columns) {
-        if (!(column in row)) {
-          throw new Error(`Colonna sconosciuta in ${query.relation}: ${column}`);
-        }
+        if (!(column in row)) throw new Error(`Colonna sconosciuta in ${query.relation}: ${column}`);
         projected[column] = row[column];
       }
       return projected;

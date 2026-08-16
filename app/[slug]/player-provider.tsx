@@ -9,6 +9,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -43,27 +44,51 @@ export function PlayerProvider({ children }: { readonly children: ReactNode }) {
   const [current, setCurrent] = useState<PlayerTrack | null>(null);
   const [playing, setPlaying] = useState(false);
 
+  /**
+   * L'intenzione di suonare, tenuta separata dal fatto di star suonando.
+   *
+   * Serve perché `src` arriva all'elemento **al render successivo** alla scelta della
+   * traccia. La versione precedente chiamava `play()` subito dentro `select`, e un commento
+   * spiegava che ci avrebbe pensato `onLoadedData` — un gestore che sull'elemento non è mai
+   * esistito. Il risultato: si chiedeva di suonare all'elemento com'era *prima*, cioè alla
+   * traccia precedente o a nessuna sorgente. Qui l'intenzione viene registrata e l'effetto
+   * qui sotto chiede di suonare **dopo** che React ha scritto `src`.
+   */
+  const [wantsPlayback, setWantsPlayback] = useState(false);
+
   const select = useCallback((track: PlayerTrack) => {
-    setCurrent((previous) => {
-      if (previous?.id === track.id) return previous;
-      return track;
-    });
     const element = audio.current;
-    if (element === null) return;
-    if (current?.id === track.id && !element.paused) {
-      element.pause();
+
+    if (current?.id === track.id) {
+      // Stessa traccia: è un interruttore, non una nuova selezione.
+      if (element !== null && !element.paused) {
+        element.pause();
+        setWantsPlayback(false);
+        return;
+      }
+      setWantsPlayback(true);
+      if (element !== null) void element.play().catch(() => setPlaying(false));
       return;
     }
-    // La sorgente cambia al render successivo: `play()` viene richiamato da `onLoadedData`.
-    void element.play().catch(() => setPlaying(false));
+
+    setCurrent(track);
+    setWantsPlayback(true);
   }, [current]);
+
+  useEffect(() => {
+    const element = audio.current;
+    if (element === null || current === null || !wantsPlayback) return;
+    void element.play().catch(() => setPlaying(false));
+  }, [current, wantsPlayback]);
 
   const toggle = useCallback(() => {
     const element = audio.current;
     if (element === null || current === null) return;
     if (element.paused) {
+      setWantsPlayback(true);
       void element.play().catch(() => setPlaying(false));
     } else {
+      setWantsPlayback(false);
       element.pause();
     }
   }, [current]);

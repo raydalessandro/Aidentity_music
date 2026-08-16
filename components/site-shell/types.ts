@@ -16,7 +16,7 @@ import type { SiteConfig } from "../../lib/contract";
  */
 export type ShellConfig = Pick<
   SiteConfig,
-  "identity" | "fontPair" | "iconFamily" | "grain" | "surfaces"
+  "identity" | "fontPair" | "iconFamily" | "grain" | "surfaces" | "sectionCopy"
 >;
 
 export type ShellSurfaceId = "feed" | "listen" | "epk" | "merch" | "home";

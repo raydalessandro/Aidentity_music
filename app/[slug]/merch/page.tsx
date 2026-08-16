@@ -1,6 +1,3 @@
-// MERCH — superficie spegnibile. Render dichiarati come tali, senza acquisto (L0.7 §2).
-// Senza una proiezione pubblica di `site_assets` (stop b) la griglia resta vuota.
-
 import type { Metadata } from "next";
 
 import { loadMerch } from "../composition";
@@ -23,11 +20,18 @@ export default async function MerchSurface({ params }: RouteParams) {
     <SurfaceShell site={site} surface="merch">
       <p>I capi mostrati sono render. Non sono in vendita da questa pagina.</p>
       {records.items.length > 0 ? (
-        <ul className="merch-grid">
-          {records.items.map((item) => (
-            <li key={item.id}>{item.alt}</li>
+        <div className="merch-grid" aria-label="Render merch">
+          {records.items.map((item, index) => (
+            <article className="merch-card" key={item.id}>
+              <div className="merch-shot">
+                {/* eslint-disable-next-line @next/next/no-img-element -- route media revocabile. */}
+                <img src={item.public_url} alt={item.alt ?? `Render merch ${index + 1}`} />
+                <span className="merch-badge">RENDER</span>
+              </div>
+              <p>Studio visuale {String(index + 1).padStart(2, "0")}</p>
+            </article>
           ))}
-        </ul>
+        </div>
       ) : null}
     </SurfaceShell>
   );

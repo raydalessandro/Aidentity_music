@@ -29,6 +29,7 @@ const config: ShellConfig = {
     location: "Milano",
     locale: "it-IT",
   },
+  sectionCopy: { version: 1 },
   fontPair: "grotesk-mono",
   iconFamily: "line",
   grain: false,

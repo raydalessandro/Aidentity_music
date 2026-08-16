@@ -12,7 +12,8 @@ import type {
 } from "./types";
 import styles from "./unica.module.css";
 
-const DOCK_ORDER: readonly ShellSurfaceId[] = ["feed", "epk", "listen", "merch", "home"];
+/** Contratto canonico Aidentity: FEED · LISTEN · [EPK] · MERCH · HOME. */
+const DOCK_ORDER: readonly ShellSurfaceId[] = ["feed", "listen", "epk", "merch", "home"];
 const SURFACE_ICON: Record<ShellSurfaceId, IconName> = {
   feed: "feed",
   listen: "listen",
@@ -25,6 +26,10 @@ function isEnabled(config: SiteTemplateHomeProps["config"], id: ShellSurfaceId):
   return config.surfaces.some((surface) => surface.id === id && surface.enabled);
 }
 
+function sectionLabel(config: SiteTemplateHomeProps["config"], id: ShellSurfaceId): string {
+  return config.sectionCopy[id]?.trim() || id.toUpperCase();
+}
+
 function homeHref(
   destination: ShellDestination,
   surface: ShellSurfaceId,
@@ -34,33 +39,29 @@ function homeHref(
   return surface === "home" ? `#content-${previewId}` : `#${surface}-${previewId}`;
 }
 
-function Topbar({ name, handle, published }: { name: string; handle: string | null; published: boolean }) {
+function BrandLockup({ name }: { name: string }) {
+  const [lead, ...tail] = name.trim().split(/\s+/);
+  return (
+    <span className={styles.brandText}>
+      <b>{lead || name}</b>
+      {tail.length > 0 && <span>{tail.join(" ")}</span>}
+      <i aria-hidden="true" />
+    </span>
+  );
+}
+
+function Topbar({ name, published }: { name: string; published: boolean }) {
   return (
     <header className={styles.topbar}>
-      <span className={styles.brand}>
-        <b>{name}</b>
+      <BrandLockup name={name} />
+      <span className={styles.signal} role="status">
         <i aria-hidden="true" />
-      </span>
-      <span className={styles.signal}>
-        <i aria-hidden="true" />
-        {published ? handle ?? "ONLINE" : "PREVIEW"}
+        {published ? "SYSTEM ONLINE" : "PREVIEW"}
       </span>
     </header>
   );
 }
 
-/**
- * Un collegamento fra superfici dello stesso sito.
- *
- * Da pubblicato deve essere un `Link`, e non e' una preferenza stilistica: su
- * `/[slug]` il player vive nel layout apposta per sopravvivere al cambio di
- * superficie, e un `<a>` ricarica il documento — quindi ferma la musica che sta
- * suonando. In un template il cui primo verbo e' «ascolta», premere ASCOLTA e
- * far tacere il player e' il difetto peggiore possibile.
- *
- * In anteprima l'indirizzo e' un'ancora nella stessa pagina e resta un `<a>`,
- * che e' anche l'unico modo di marcare una superficie spenta con `aria-disabled`.
- */
 function SurfaceLink({
   published,
   href,
@@ -101,15 +102,8 @@ function HomeDock({
       {DOCK_ORDER.map((surface) => {
         const enabled = isEnabled(config, surface);
         if (published && !enabled) return null;
-        const center = surface === "listen";
-        const className = `${styles.dockLink} ${center ? `${styles.dockCenter} dock-center` : ""}`;
-        const content = (
-          <>
-            <Icon name={SURFACE_ICON[surface]} />
-            <span>{surface.toUpperCase()}</span>
-          </>
-        );
-
+        const center = surface === "epk";
+        const className = `${styles.dockLink} ${center ? styles.dockCenter : ""}`;
         return (
           <SurfaceLink
             key={surface}
@@ -120,7 +114,8 @@ function HomeDock({
             interactive={interactive}
             contractCenter={center}
           >
-            {content}
+            <Icon name={SURFACE_ICON[surface]} />
+            <span>{sectionLabel(config, surface)}</span>
           </SurfaceLink>
         );
       })}
@@ -152,12 +147,26 @@ function HomeModule({
   );
 }
 
+function HeroTitle({ name }: { name: string }) {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length < 2) return <h1>{name}</h1>;
+  const split = Math.ceil(words.length / 2);
+  return (
+    <h1>
+      {words.slice(0, split).join(" ")}
+      <br />
+      <em>{words.slice(split).join(" ")}</em>
+    </h1>
+  );
+}
+
 function UnicaHome({
   config,
   palette,
   previewId,
   destination = { kind: "anteprima" },
   heroSrc = null,
+  visuals = [],
   embedded = false,
   interactive = true,
   children,
@@ -168,6 +177,7 @@ function UnicaHome({
   const listenEnabled = isEnabled(config, "listen");
   const feedEnabled = isEnabled(config, "feed");
   const epkEnabled = isEnabled(config, "epk");
+  const ribbon = visuals.slice(0, 5);
 
   return (
     <section
@@ -181,16 +191,8 @@ function UnicaHome({
       aria-labelledby={`preview-${previewId}`}
     >
       <a className={styles.skipLink} href={`#content-${previewId}`}>Salta al contenuto</a>
-      <Topbar name={name} handle={config.identity.handle} published={published} />
+      <Topbar name={name} published={published} />
 
-      {/*
-        `main` soltanto quando questo guscio E' la pagina. Nello showroom ne
-        convivono quattro nello stesso documento, e quattro landmark `main`
-        sono una violazione di accessibilita' vera: axe la segnala, e chi
-        naviga per landmark si trova quattro «contenuti principali». La prop
-        `embedded` esisteva gia' ma scriveva solo un attributo: ora decide
-        l'elemento.
-      */}
       <Contenuto id={`content-${previewId}`}>
         <section className={styles.hero}>
           {heroSrc === null ? (
@@ -203,47 +205,68 @@ function UnicaHome({
           )}
           <div className={styles.heroShade} aria-hidden="true" />
           <div className={styles.heroGrid} aria-hidden="true" />
-          <div className={styles.heroMotif} data-art-slot="hero-mark" aria-hidden="true">
-            <svg viewBox="0 0 120 120">
-              <circle cx="60" cy="60" r="46" />
-              <path d="M14 60h92M60 14v92" />
-              <path d="m28 28 64 64M92 28 28 92" />
-            </svg>
-          </div>
 
           <div className={styles.heroCopy}>
-            <span className={styles.eyebrow}>{config.identity.location ?? config.identity.handle ?? "NUOVA IDENTITÀ"}</span>
-            <h1 id={`preview-${previewId}`}>{name}</h1>
-            {config.identity.claim && <p className={styles.claim}>{config.identity.claim}</p>}
+            <span className={styles.eyebrow}>
+              {config.identity.handle ? `@${config.identity.handle}` : config.identity.location ?? "ARCHIVIO / 0001"}
+            </span>
+            <div id={`preview-${previewId}`}>
+              <HeroTitle name={name} />
+            </div>
+            {(config.identity.shortBio ?? config.identity.claim) && (
+              <p className={styles.heroDescription}>{config.identity.shortBio ?? config.identity.claim}</p>
+            )}
             <div className={styles.heroActions}>
-              {listenEnabled && <SurfaceLink published={published} interactive={interactive} className={styles.primaryCta} href={homeHref(destination, "listen", previewId)}>ASCOLTA</SurfaceLink>}
-              {feedEnabled && <SurfaceLink published={published} interactive={interactive} className={styles.ghostCta} href={homeHref(destination, "feed", previewId)}>VISUAL</SurfaceLink>}
+              {listenEnabled && (
+                <SurfaceLink published={published} interactive={interactive} className={styles.primaryCta} href={homeHref(destination, "listen", previewId)}>
+                  ASCOLTA ORA
+                </SurfaceLink>
+              )}
+              {feedEnabled && (
+                <SurfaceLink published={published} interactive={interactive} className={styles.ghostCta} href={homeHref(destination, "feed", previewId)}>
+                  APRI IL FEED
+                </SurfaceLink>
+              )}
             </div>
           </div>
+
+          {config.identity.location && <div className={styles.coordinate}>{config.identity.location}</div>}
         </section>
 
         <section className={styles.moduleStrip} aria-label="Porte del sito">
-          {listenEnabled && <HomeModule published={published} interactive={interactive} number="01" title="LISTEN" copy="musica e release" href={homeHref(destination, "listen", previewId)} />}
-          {feedEnabled && <HomeModule published={published} interactive={interactive} number="02" title="FEED" copy="immagini e frammenti" href={homeHref(destination, "feed", previewId)} />}
-          {epkEnabled && <HomeModule published={published} interactive={interactive} number="03" title="EPK" copy="bio, press e contatti" href={homeHref(destination, "epk", previewId)} />}
+          {listenEnabled && (
+            <HomeModule published={published} interactive={interactive} number="01" title={sectionLabel(config, "listen")} copy="musica e release" href={homeHref(destination, "listen", previewId)} />
+          )}
+          {feedEnabled && (
+            <HomeModule published={published} interactive={interactive} number="02" title={sectionLabel(config, "feed")} copy="visual e frammenti" href={homeHref(destination, "feed", previewId)} />
+          )}
+          {epkEnabled && (
+            <HomeModule published={published} interactive={interactive} number="03" title={sectionLabel(config, "epk")} copy="bio, press e contatti" href={homeHref(destination, "epk", previewId)} />
+          )}
         </section>
 
         <section className={styles.editorial}>
-          <div>
-            <span className={styles.eyebrow}>IDENTITÀ / 001</span>
-            <h2>{config.identity.shortBio ?? config.identity.claim ?? name}</h2>
+          <div className={styles.editorialHeading}>
+            <span className={styles.eyebrow}>IDENTITÀ / A</span>
+            <h2>{config.identity.claim ?? config.identity.shortBio ?? name}</h2>
           </div>
           <div className={styles.editorialCopy}>
             {config.identity.longBio && <p>{config.identity.longBio}</p>}
-            {config.identity.location && <small>{config.identity.location}</small>}
+            {config.identity.location && <small>BASE / {config.identity.location}</small>}
           </div>
         </section>
 
-        <section className={styles.artRail} aria-hidden="true">
-          <div data-art-slot="rail-a">{name.slice(0, 1)}</div>
-          <div data-art-slot="rail-b"><span /></div>
-          <div data-art-slot="rail-c">{config.identity.handle?.slice(0, 2).toUpperCase() ?? "ID"}</div>
-        </section>
+        {(ribbon.length > 0 || heroSrc !== null) && (
+          <section className={styles.visualRibbon} aria-label="Archivio visivo" tabIndex={0}>
+            {(ribbon.length > 0 ? ribbon : [{ id: "hero", src: heroSrc!, alt: `Visual principale di ${name}`, caption: "HERO" }]).map((item, index) => (
+              <figure key={item.id}>
+                {/* eslint-disable-next-line @next/next/no-img-element -- route media revocabile. */}
+                <img src={item.src} alt={item.alt} />
+                <figcaption>{String(index + 1).padStart(2, "0")} / {item.caption ?? "VISUAL"}</figcaption>
+              </figure>
+            ))}
+          </section>
+        )}
 
         {children}
       </Contenuto>
@@ -267,14 +290,25 @@ function SurfaceDock({
       {DOCK_ORDER.map((id) => {
         const item = byId.get(id);
         if (!item?.enabled) return null;
-        const center = id === "listen";
-        const className = `${styles.dockLink} ${center ? `${styles.dockCenter} dock-center` : ""}`;
+        const center = id === "epk";
+        const className = `${styles.dockLink} ${center ? styles.dockCenter : ""}`;
         const content = <><Icon name={SURFACE_ICON[id]} /><span>{item.label}</span></>;
         return id === surface
           ? <span key={id} className={className} data-dock-center={center ? "true" : undefined} aria-current="page">{content}</span>
           : <Link key={id} className={className} data-dock-center={center ? "true" : undefined} href={item.href}>{content}</Link>;
       })}
     </nav>
+  );
+}
+
+function SurfaceHeroMedia({ src, name, className }: { src: string | null; name: string; className?: string }) {
+  return src === null ? (
+    <div className={`${className} ${styles.surfaceHeroFallback}`} aria-hidden="true">
+      <span>{name.slice(0, 2)}</span>
+    </div>
+  ) : (
+    // eslint-disable-next-line @next/next/no-img-element -- route media revocabile.
+    <img className={className} src={src} alt={`Visual di ${name}`} />
   );
 }
 
@@ -285,9 +319,12 @@ function UnicaSurface({
   label,
   navigation,
   published,
+  heroSrc = null,
   children,
 }: SiteTemplateSurfaceProps) {
   const name = config.identity.name ?? "SENZA NOME";
+  const handle = config.identity.handle ? `@${config.identity.handle}` : name;
+
   return (
     <section
       className={`${styles.root} ${styles.surface} font-${config.fontPair} icons-${config.iconFamily}`}
@@ -299,10 +336,45 @@ function UnicaSurface({
       data-surface={surface}
     >
       <a className={styles.skipLink} href={`#contenuto-${surface}`}>Salta al contenuto</a>
-      <Topbar name={name} handle={config.identity.handle} published={published} />
+      <Topbar name={name} published={published} />
       <main id={`contenuto-${surface}`} className={styles.surfaceContent}>
-        <span className={styles.eyebrow}>{name}</span>
-        <h1>{label}</h1>
+        {surface === "listen" ? (
+          <section className={styles.listenLead}>
+            <div className={styles.releaseCover}>
+              <SurfaceHeroMedia src={heroSrc} name={name} className={styles.releaseCoverMedia} />
+              <div className={styles.coverStamp}><BrandLockup name={name} /></div>
+            </div>
+            <div className={styles.releaseCopy}>
+              <span className={styles.eyebrow}>RELEASE / ARCHIVIO</span>
+              <h1>{label}</h1>
+              {config.identity.shortBio && <p>{config.identity.shortBio}</p>}
+              <div className={styles.releaseMeta}>
+                <span>{config.identity.location ?? "IT"}</span>
+                <span>{handle}</span>
+                <span>SOURCE READY</span>
+              </div>
+            </div>
+          </section>
+        ) : surface === "feed" ? (
+          <section className={styles.feedProfile}>
+            <div className={styles.feedAvatar}>
+              <SurfaceHeroMedia src={heroSrc} name={name} className={styles.feedAvatarMedia} />
+            </div>
+            <div className={styles.feedProfileCopy}>
+              <span className={styles.eyebrow}>VISUAL FIELD</span>
+              <h1>{handle}</h1>
+              <h2>{name}</h2>
+              {config.identity.shortBio && <p>{config.identity.shortBio}</p>}
+              {config.identity.location && <small>{config.identity.location}</small>}
+            </div>
+          </section>
+        ) : (
+          <header className={styles.surfaceHead}>
+            <span className={styles.eyebrow}>{handle}</span>
+            <h1>{label}</h1>
+            {config.identity.claim && <p>{config.identity.claim}</p>}
+          </header>
+        )}
         <div className={styles.surfaceBody}>{children}</div>
       </main>
       <SurfaceDock navigation={navigation} surface={surface} />

@@ -187,11 +187,24 @@ describe("invariante: un solo `audio` in tutto il sorgente di prodotto", () => {
     });
   }
 
+  /**
+   * Senza commenti. Questo banco è diventato rosso su un `layout.tsx` che si limitava a
+   * *nominare* `<audio>` in una nota — «il provider vive nel layout per non rimontare
+   * l'unico `<audio>` fra le superfici». Il codice era corretto e la nota pure: a sbagliare
+   * era la misura, che contava la prosa insieme al markup. Un presidio che si può rendere
+   * rosso scrivendo un commento è un presidio che prima o poi qualcuno zittisce cambiando
+   * il commento invece del codice.
+   */
+  function withoutComments(source: string): string {
+    return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+  }
+
   it("dichiara l'elemento audio una volta sola, dentro il provider del player", () => {
     const occurrences = roots
       .flatMap((root) => sourceFiles(root))
       .flatMap((file) => {
-        const matches = readFileSync(join(repoRoot, file), "utf8").match(/<audio[\s>]/g) ?? [];
+        const source = withoutComments(readFileSync(join(repoRoot, file), "utf8"));
+        const matches = source.match(/<audio[\s>]/g) ?? [];
         return matches.map(() => file);
       });
 

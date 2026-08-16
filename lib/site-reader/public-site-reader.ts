@@ -1,44 +1,9 @@
-// Adattatore: implementa la porta `SiteReader` del filone D leggendo le proiezioni
-// pubbliche. Vive **fuori** da `app/[slug]/**` perché quel perimetro non deve importare
-// il client Supabase né oggi né mai (decisione di Ray, presidiata da
-// `app/[slug]/composition.test.ts`). La dipendenza va nel verso giusto: qui si importa il
-// contratto del renderer, mai il contrario.
-//
-// Non conosce PostgREST: parla soltanto con `PublicRowSource`. Da questo discendono due
-// cose pratiche — la mappatura è provabile con un doppio in memoria, senza database, e
-// l'unico modulo che sa com'è fatta una catena `.from().select().eq()` è
-// `postgrest-row-source.ts`, che si può sostituire senza toccare una riga di mappatura.
-//
-// ── La sorgente audio, e da dove arriva ───────────────────────────────────────────────
-//
-// `PublicTrackRow.audio_url` era il campo mancante che teneva LISTEN muto: `public_tracks`
-// non espone `storage_path` e non deve, quindi il read model scartava ogni traccia `upload`
-// con `upload-source-missing`. La route media esiste ora, e l'URL che la raggiunge non è un
-// dato del database: è una funzione di `(site_id, id)`, cioè di due colonne già pubbliche.
-//
-// Si costruisce quindi qui, dopo la lettura, con `mediaUrl()` — un modulo senza import.
-// Nessuna query cambia, nessuna colonna nuova viene chiesta, e il path privato resta dove
-// sta. Chi decide se quel file è visibile non è questo adattatore: è la route, quando il
-// browser chiede l'audio, e lo decide su `published`, tenant e `purged_at`.
-//
-// Le tracce `embed` non ricevono nulla: non hanno file, e §5 lo impone con un CHECK.
-//
-// ── Ciò che questo adattatore NON restituisce ancora ──────────────────────────────────
-//
-// `PublicAssetRow` pretende `public_url` e `alt`. La proiezione `public_assets` espone
-// `id`, `site_id`, `kind`, `sort_order` e nient'altro; `alt` non esiste nemmeno come colonna
-// in `site_assets`. L'URL ora saprei costruirlo — è lo stesso `mediaUrl()` con `kind`
-// `asset` — ma `FeedRecords.assets`, `EpkRecords.photoKit` e `MerchRecords.items` sono
-// consumati da `app/[slug]/surface-content.tsx`, che in questo momento è in mano a un altro
-// filone. Restano vuoti e **nessuna query parte** verso `public_assets`: chiuderlo qui
-// significherebbe scrivere metà di una superficie che sta cambiando altrove.
-
 import {
-  EMPTY_MERCH,
   type EpkRecords,
   type FeedRecords,
   type ListenRecords,
   type MerchRecords,
+  type PublicAssetRow,
   type PublicSiteRow,
   type PublicTrackRow,
   type PublishedSiteIndexRow,
@@ -48,6 +13,7 @@ import { mediaUrl } from "../media/url";
 import type { PublicRelation, PublicRowSource } from "./row-source";
 import {
   parseRows,
+  publicAssetContract,
   publicContactContract,
   publicDateContract,
   publicLinkContract,
@@ -59,23 +25,27 @@ import {
   publishedSiteIndexContract,
 } from "./rows";
 
-/** Ordinamento delle collezioni: `sort_order` è la volontà dell'owner, `id` rompe i pari. */
 const BY_SORT_ORDER = [
   { column: "sort_order", ascending: true },
   { column: "id", ascending: true },
 ] as const;
-
-/** La sitemap deve essere stabile fra due build a parità di dati. */
 const BY_SLUG = [{ column: "slug", ascending: true }] as const;
 
-/**
- * Sorgente audio della traccia `upload`: la route media, indirizzata con le due colonne
- * pubbliche che la riga già porta. `row.site_id` e non il parametro del metodo, perché il
- * tenant di una riga è un dato della riga — se i due divergessero, quello giusto è questo.
- */
 function withAudioUrl(row: PublicTrackRow): PublicTrackRow {
   if (row.source !== "upload") return row;
   return { ...row, audio_url: mediaUrl("track", row.site_id, row.id) };
+}
+
+function withAssetUrl(
+  row: Pick<PublicAssetRow, "id" | "site_id" | "kind" | "sort_order">,
+): PublicAssetRow {
+  return {
+    ...row,
+    public_url: mediaUrl("asset", row.site_id, row.id),
+    // v1 non persiste ancora un alt testuale sugli asset. Il renderer produce un fallback
+    // contestuale; non inventiamo descrizioni dentro il database.
+    alt: null,
+  };
 }
 
 export function createPublicSiteReader(source: PublicRowSource): SiteReader {
@@ -91,10 +61,13 @@ export function createPublicSiteReader(source: PublicRowSource): SiteReader {
     });
   }
 
+  async function assetsOf(siteId: string): Promise<readonly PublicAssetRow[]> {
+    const rows = parseRows(publicAssetContract, await rowsOf(publicAssetContract, siteId));
+    return rows.map(withAssetUrl);
+  }
+
   return {
     async findPublishedSite(slug: string): Promise<PublicSiteRow | null> {
-      // Il filtro `publication_status = 'published'` è dentro la vista: qui non si
-      // ripete e soprattutto non si può disattivare da questo lato.
       const rows = await source.fetchRows({
         relation: publicSiteContract.relation,
         columns: publicSiteContract.columns,
@@ -120,17 +93,27 @@ export function createPublicSiteReader(source: PublicRowSource): SiteReader {
     },
 
     async loadFeed(siteId: string): Promise<FeedRecords> {
-      const posts = parseRows(publicPostContract, await rowsOf(publicPostContract, siteId));
-      return { posts, assets: [] };
+      const [postRows, assets] = await Promise.all([
+        rowsOf(publicPostContract, siteId),
+        assetsOf(siteId),
+      ]);
+      const posts = parseRows(publicPostContract, postRows);
+      const used = new Set<string>();
+      for (const post of posts) {
+        if (post.visual_asset_id) used.add(post.visual_asset_id);
+        if (post.cover_asset_id) used.add(post.cover_asset_id);
+      }
+      return { posts, assets: assets.filter((asset) => used.has(asset.id)) };
     },
 
     async loadEpk(siteId: string): Promise<EpkRecords> {
-      const [links, press, dates, metrics, contacts] = await Promise.all([
+      const [links, press, dates, metrics, contacts, assets] = await Promise.all([
         rowsOf(publicLinkContract, siteId),
         rowsOf(publicPressContract, siteId),
         rowsOf(publicDateContract, siteId),
         rowsOf(publicMetricContract, siteId),
         rowsOf(publicContactContract, siteId),
+        assetsOf(siteId),
       ]);
 
       return {
@@ -138,14 +121,14 @@ export function createPublicSiteReader(source: PublicRowSource): SiteReader {
         press: parseRows(publicPressContract, press),
         dates: parseRows(publicDateContract, dates),
         metrics: parseRows(publicMetricContract, metrics),
-        // La vista filtra `consent_confirmed_at is not null`: qui non si può allentare.
         contacts: parseRows(publicContactContract, contacts),
-        photoKit: [],
+        photoKit: assets.filter((asset) => asset.kind === "photo_hi"),
       };
     },
 
-    async loadMerch(): Promise<MerchRecords> {
-      return EMPTY_MERCH;
+    async loadMerch(siteId: string): Promise<MerchRecords> {
+      const assets = await assetsOf(siteId);
+      return { items: assets.filter((asset) => asset.kind === "merch") };
     },
   };
 }
