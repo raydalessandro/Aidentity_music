@@ -74,7 +74,7 @@ export function TrackCatalogue({ view }: { readonly view: ListenView }) {
 export function EpkIdentity({ site }: { readonly site: SiteView }) {
   const { identity } = site.config;
   return (
-    <div className="epk-identity">
+    <div>
       <p className="claim">{identity.claim}</p>
       <h2>Base</h2>
       <p>{identity.location}</p>

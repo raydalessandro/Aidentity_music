@@ -469,6 +469,18 @@
 }
 .surfaceBody :global(.track-list button:hover) { background: var(--panel); }
 
+/*
+ * L'iframe di Spotify/YouTube. Senza una regola resta alla misura di default di un
+ * `<iframe>` — 300x150 — che su un telefono e' meta' larghezza e un ritaglio del player.
+ * Difetto preesistente, trovato dal presidio sulle classi orfane.
+ */
+.surfaceBody :global(.embed-frame) {
+  width: 100%;
+  min-height: 152px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
 .surfaceBody :global(.feed-grid) {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

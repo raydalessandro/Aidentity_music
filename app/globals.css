@@ -86,5 +86,11 @@ h1 { max-width: 12ch; margin: 0; font-size: clamp(3rem, 13vw, 9rem); font-weight
 .icons-stencil .shell-icon { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: square; stroke-linejoin: bevel; stroke-dasharray: 8 1.25; }
 .icons-stencil .shell-icon circle, .icons-stencil .shell-icon rect { fill: currentColor; stroke: none; }
 
+/* La 404 dei siti: e' cio' che vede chi sbaglia l'indirizzo di un artista. Era un `<main>`
+   senza alcuna regola. Difetto preesistente, trovato dal presidio sulle classi orfane. */
+.not-found { display: grid; align-content: center; gap: 1rem; min-height: 60svh; max-width: 34rem; margin: 0 auto; padding: 2rem 1.25rem; color: var(--ink); }
+.not-found h1 { margin: 0; font-size: clamp(1.6rem, 5vw, 2.4rem); letter-spacing: -.03em; }
+.not-found p { margin: 0; color: var(--muted); }
+
 @media (max-width: 36rem) { .preview-stack { padding: 0; gap: 1.25rem; } .preview-intro { padding: 1.5rem; } .site-shell { min-height: 44rem; border-inline: 0; } .player-shell { right: 1rem; left: 1rem; } .hero-grid { grid-template-columns: 1fr; } .hero-mark { max-width: 12rem; } .hero-image { max-width: 12rem; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
