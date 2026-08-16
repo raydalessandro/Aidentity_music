@@ -1,26 +1,19 @@
 import type { CSSProperties } from "react";
 
 import type { ShellPalette } from "../../components/site-shell/palettes";
+import { paletteVars } from "../../components/site-shell/style";
 
 /**
  * Variabili CSS del tema per i contenitori che non sono `SiteShell`.
  *
- * `components/site-shell/SiteShell.tsx` ha una funzione equivalente ma **privata**
- * (`paletteVars`, non esportata). Non modifico il filone A per esportarla: la scrivo qui,
- * nel mio perimetro, e chiedo nel report che sia A a esporla, così questa sparisce.
- * Le variabili e i loro nomi restano quelli di `app/globals.css`, che è di A.
+ * Qui c'era una copia letterale della `paletteVars` privata di `SiteShell.tsx`, con la
+ * richiesta scritta che il filone A la esportasse «così questa sparisce». Ora A la esporta
+ * da `components/site-shell/style.ts` e la copia è sparita: resta il solo inoltro, perché il
+ * nome `paletteStyle` è quello con cui il renderer di route chiama la traduzione.
+ * Le variabili e i loro nomi restano quelli di `app/globals.css`.
  */
 export function paletteStyle(palette: ShellPalette): CSSProperties {
-  return {
-    "--ink": palette.ink,
-    "--panel": palette.panel,
-    "--paper": palette.paper,
-    "--muted": palette.muted,
-    "--dim": palette.dim,
-    "--line": palette.line,
-    "--acid": palette.acid,
-    "--acid-ink": palette.acidInk,
-  } as CSSProperties;
+  return paletteVars(palette);
 }
 
 export const PALETTE_CSS_VARIABLES: readonly string[] = [

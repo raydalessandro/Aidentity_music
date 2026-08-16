@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 
 import { EpkSurface } from "@/components/epk/EpkSurface";
-import { SiteShell } from "@/components/site-shell/SiteShell";
+import { SiteTemplateHome } from "@/components/site-templates/SiteTemplate";
 import { siteConfigDraftSchema } from "@/lib/contract";
 import { DraftContentPreview } from "@/lib/wizard/DraftContentPreview";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -39,7 +39,7 @@ export default async function OwnerPreviewPage({ params }: { params: Promise<{ s
   return (
     <main style={paletteStyleForDraft(parsed.data)}>
       <p style={{ padding: "12px 16px", margin: 0, fontFamily: "monospace" }}>PREVIEW OWNER · draft non pubblico</p>
-      <SiteShell config={parsed.data} palette={paletteForDraft(parsed.data)} previewId={`owner-${siteId}`} />
+      <SiteTemplateHome config={parsed.data} palette={paletteForDraft(parsed.data)} previewId={`owner-${siteId}`} />
       <DraftContentPreview
         config={parsed.data}
         previewId={`owner-${siteId}`}

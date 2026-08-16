@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { SiteShell } from "../../components/site-shell/SiteShell";
+import { SiteTemplateHome } from "../../components/site-templates/SiteTemplate";
 import { baseUrl } from "../../lib/base-url";
 import { mediaUrl } from "../../lib/media/url";
 import { loadListen, loadSite } from "./composition";
@@ -48,7 +48,7 @@ export default async function HomeSurface({ params }: RouteParams) {
         cartella non raggiunge il client Supabase. Il controllo su `published`, sulla purga e
         sul tenant lo fa la route quando il browser chiede l'immagine.
       */}
-      <SiteShell
+      <SiteTemplateHome
         config={site.config}
         palette={site.palette}
         previewId={site.slug}

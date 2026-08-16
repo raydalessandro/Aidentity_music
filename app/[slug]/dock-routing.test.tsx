@@ -8,12 +8,24 @@
 //
 // Misurato prima di scrivere questi banchi: con il dock riportato alle ancore, la suite
 // restava interamente verde. È il motivo per cui questo file esiste.
+//
+// Dal confine template in poi questi banchi rendono la HOME **attraverso**
+// `SiteTemplateHome`, non più direttamente con `SiteShell`. Non è un dettaglio di stile: la
+// prop che porta tutto questo comportamento è `destination`, e un livello di dispatch che
+// smettesse di propagarla non sarebbe un errore di tipo — la prop è opzionale e il default è
+// l'anteprima. Rendendo dal confine, la mancata propagazione riaccende esattamente i difetti
+// che questo file presidia. Misurato: sostituendo lo spread di `SiteTemplate.tsx` con un
+// elenco esplicito di prop che dimentica `destination`, 9 banchi di questo file diventano
+// rossi (13 in tutta la suite). Togliendo invece `destination` dalla sola route `/[slug]`,
+// ne diventano rossi 2 — quelli in fondo, che montano il componente di route vero.
 
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
-import { SiteShell } from "../../components/site-shell/SiteShell";
+import { SiteTemplateHome } from "../../components/site-templates/SiteTemplate";
+import { configureSiteReader, resetSiteReader } from "./composition";
 import { StubSiteReader } from "./fixtures";
+import HomeSurface from "./page";
 import { publishedDestination, resolveSite, surfaceHref, type SiteView } from "./read-model";
 import { SurfaceShell } from "./surface-content";
 
@@ -23,9 +35,19 @@ async function siteView(slug: string): Promise<SiteView> {
   return resolution.site;
 }
 
+/** La route vera, con il lettore di prova iniettato dal bordo di composizione. */
+async function routePubblicata(slug: string): Promise<string> {
+  configureSiteReader(new StubSiteReader());
+  return renderToStaticMarkup(await HomeSurface({ params: Promise.resolve({ slug }) }));
+}
+
+afterEach(() => {
+  resetSiteReader();
+});
+
 function homePubblicata(site: SiteView): string {
   return renderToStaticMarkup(
-    <SiteShell
+    <SiteTemplateHome
       config={site.config}
       palette={site.palette}
       previewId={site.slug}
@@ -36,7 +58,7 @@ function homePubblicata(site: SiteView): string {
 
 function homeAnteprima(site: SiteView): string {
   return renderToStaticMarkup(
-    <SiteShell config={site.config} palette={site.palette} previewId={site.slug} />,
+    <SiteTemplateHome config={site.config} palette={site.palette} previewId={site.slug} />,
   );
 }
 
@@ -136,5 +158,34 @@ describe("un sito pubblicato non si presenta come un'anteprima", () => {
 
   it("in anteprima il segnaposto resta, perché lì il player vero non c'è", async () => {
     expect(homeAnteprima(await siteView("nvll-click"))).toContain("player-shell");
+  });
+});
+
+describe("la route `/[slug]` monta davvero una HOME pubblicata", () => {
+  // I banchi sopra rendono il guscio con props costruiti a mano: dimostrano che il guscio si
+  // comporta bene se riceve la destinazione giusta, non che la route gliela passi. Dopo il
+  // confine template la catena da presidiare è più lunga — route → SiteTemplateHome →
+  // registry → baseline → SiteShell — e un anello che perde `destination` non è un errore di
+  // tipo. Questi due banchi la percorrono per intero, montando il componente di route vero.
+
+  it("il markup della route ha il dock verso le rotte e non si dichiara anteprima", async () => {
+    const markup = await routePubblicata("nvll-click");
+
+    expect(markup).toContain('href="/nvll-click/feed"');
+    expect(markup).toContain('href="/nvll-click/listen"');
+    expect(markup).not.toContain("#feed-nvll-click");
+    expect(markup).not.toContain("PREVIEW");
+    expect(markup).not.toContain("player-shell");
+  });
+
+  it("una superficie spenta non compare nel dock servito dalla route", async () => {
+    // Il caso che DEVE essere rifiutato: `miriam-serra` ha MERCH spenta nella fixture, e
+    // l'href esisterebbe. L'esito atteso è l'assenza, non un elemento marcato.
+    const markup = await routePubblicata("miriam-serra");
+
+    expect(markup).not.toContain('href="/miriam-serra/merch"');
+    expect(markup).not.toContain("aria-disabled");
+    // Se il dock sparisse del tutto questo banco resterebbe verde: ci pensa la riga sotto.
+    expect(markup).toContain('href="/miriam-serra/feed"');
   });
 });
