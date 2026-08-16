@@ -1,38 +1,15 @@
 import Link from "next/link";
-import type { CSSProperties } from "react";
 
-import type { SiteConfig } from "../../lib/contract";
 import { Icon, type IconName } from "./Icon";
 import type { ShellPalette } from "./palettes";
-
-export type ShellConfig = Pick<
-  SiteConfig,
-  "identity" | "fontPair" | "iconFamily" | "grain" | "surfaces"
->;
-
-export type ShellSurfaceId = "feed" | "listen" | "epk" | "merch" | "home";
+import { paletteVars } from "./style";
+import type { ShellConfig, ShellDestination, ShellSurfaceId } from "./types";
 
 /**
- * Lo stesso guscio serve quattro superfici molto diverse: il sito **pubblicato**, l'anteprima
- * dell'owner, l'anteprima da token e lo showroom dei template. Fino a qui le rendeva tutte
- * come se fossero un'anteprima a schermo unico, e sul sito vero questo si vedeva: il dock
- * puntava ad ancore (`#feed-<previewId>`) verso sezioni che su quella pagina non esistono,
- * quindi **nessuna superficie era raggiungibile cliccando**; la topbar diceva `PREVIEW` a un
- * visitatore; e un player permanentemente spento occupava lo spazio del player vero, che su
- * `/[slug]` vive nel layout.
- *
- * La destinazione è un'unione discriminata e non due prop separate perché i due difetti non
- * devono poter tornare a combinarsi: non esiste un `pubblicato` senza gli href delle rotte,
- * e non esiste un'`anteprima` che ne porti. Il tipo lo impedisce, non la disciplina di chi
- * chiama.
- *
- * D lo aveva chiesto per iscritto in testa a `app/[slug]/surface-content.tsx`: «non lo
- * duplico e non lo modifico: chiedo nel report che A accetti gli href». Questo è A che li
- * accetta.
+ * I tipi del guscio vivono in `./types` perché il confine template possa nominarli senza
+ * importare questo componente. Restano esportati da qui: gli import esistenti non cambiano.
  */
-export type ShellDestination =
-  | { readonly kind: "anteprima" }
-  | { readonly kind: "pubblicato"; readonly hrefs: Readonly<Record<ShellSurfaceId, string>> };
+export type { ShellConfig, ShellDestination, ShellSurfaceId } from "./types";
 
 type ShellProps = {
   config: ShellConfig;
@@ -53,19 +30,6 @@ type ShellProps = {
    */
   heroSrc?: string | null;
 };
-
-function paletteVars(palette: ShellPalette): CSSProperties {
-  return {
-    "--ink": palette.ink,
-    "--panel": palette.panel,
-    "--paper": palette.paper,
-    "--muted": palette.muted,
-    "--dim": palette.dim,
-    "--line": palette.line,
-    "--acid": palette.acid,
-    "--acid-ink": palette.acidInk,
-  } as CSSProperties;
-}
 
 /**
  * `published` non ha default: ogni chiamante deve dichiarare cosa sta rendendo. Un default

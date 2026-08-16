@@ -1,6 +1,7 @@
 import { Landing } from "../components/landing/Landing";
-import { SiteShell, type ShellConfig } from "../components/site-shell/SiteShell";
 import { shellPalettes } from "../components/site-shell/palettes";
+import type { ShellConfig } from "../components/site-shell/types";
+import { SiteTemplateHome } from "../components/site-templates/SiteTemplate";
 
 const demoConfigs: readonly ShellConfig[] = [
   {
@@ -39,7 +40,11 @@ export default function GuscioThemable() {
         <h2>Un&apos;ossatura. Quattro toni.</h2>
         <p className="preview-nota">Cambiano colori, caratteri e icone. La struttura e i dati restano coerenti.</p>
       </header>
-      {shellPalettes.map((palette, index) => <SiteShell key={palette.id} config={demoConfigs[index]!} palette={palette} previewId={palette.id} />)}
+      {/*
+        Nessun `destination`: lo showroom è e resta un'anteprima a schermo unico. È la stessa
+        assenza di prima — passare dal confine template non la cambia.
+      */}
+      {shellPalettes.map((palette, index) => <SiteTemplateHome key={palette.id} config={demoConfigs[index]!} palette={palette} previewId={palette.id} />)}
     </div>
   </>;
 }

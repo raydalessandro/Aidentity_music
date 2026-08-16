@@ -1,47 +1,19 @@
 // Presentazione delle superfici diverse da HOME.
-// HOME resta resa da `SiteShell` del filone A, consumata così com'è.
 //
-// Perché qui non c'è il dock: `SurfaceDock` di A costruiva href ad ancora
-// (`#feed-<previewId>`) e serviva la pagina di anteprima a schermo unico; non sapeva produrre
-// `/[slug]/feed`. Non l'ho duplicato e non l'ho modificato: navigazione testuale minima, e la
-// richiesta che A accettasse gli href lasciata nel report. **A ora li accetta**
-// (`ShellDestination`), quindi HOME naviga davvero: questa nav resta come navigazione delle
-// superfici non-HOME, e le due leggono lo stesso `surfaceHref`. La regola non cambia: una
-// superficie spenta non compare qui e non è raggiungibile via URL.
+// Il chrome visuale non vive più qui: `SurfaceShell` traduce la vista di dominio nei props
+// del confine template e delega la geometria a `SiteTemplateSurface`. Restano in questo file
+// soltanto i contenuti — catalogo tracce e identità EPK — cioè le cose che dipendono dai dati
+// del tenant e non dal layout.
+//
+// La regola sulle superfici non cambia ed è ora scritta una volta sola, dentro il template:
+// una superficie spenta non compare nella navigazione e non è raggiungibile via URL. Gli
+// indirizzi restano quelli di `surfaceHref`, gli stessi che alimentano il dock della HOME
+// pubblicata: una sorgente di verità, come dopo la #26.
 
-import Link from "next/link";
-
-import { ShellTopbar } from "../../components/site-shell/SiteShell";
+import { SiteTemplateSurface } from "../../components/site-templates/SiteTemplate";
 import { EmbedFrame } from "./embed-frame";
 import { TrackPlayButton } from "./player-provider";
 import type { ListenView, SiteView, SurfaceId } from "./read-model";
-import { paletteStyle } from "./theme";
-
-export function SurfaceNav({
-  site,
-  current,
-}: {
-  readonly site: SiteView;
-  readonly current: SurfaceId;
-}) {
-  return (
-    <nav aria-label={`Superfici di ${site.config.identity.name}`}>
-      <ul>
-        {site.surfaces
-          .filter((surface) => surface.enabled)
-          .map((surface) => (
-            <li key={surface.id}>
-              {surface.id === current ? (
-                <span aria-current="page">{surface.label}</span>
-              ) : (
-                <Link href={surface.href}>{surface.label}</Link>
-              )}
-            </li>
-          ))}
-      </ul>
-    </nav>
-  );
-}
 
 export function SurfaceShell({
   site,
@@ -52,28 +24,22 @@ export function SurfaceShell({
   readonly surface: SurfaceId;
   readonly children: React.ReactNode;
 }) {
-  const { config, palette } = site;
   const label = site.surfaces.find((entry) => entry.id === surface)?.label ?? surface.toUpperCase();
 
   return (
-    <section
-      className={`site-shell font-${config.fontPair} icons-${config.iconFamily}`}
-      style={paletteStyle(palette)}
-      data-grain={config.grain}
-      data-palette={palette.id}
-      data-surface={surface}
+    <SiteTemplateSurface
+      config={site.config}
+      palette={site.palette}
+      surface={surface}
+      label={label}
+      navigation={site.surfaces}
+      // Questo componente rende soltanto superfici di un sito **pubblicato**: le anteprime
+      // sono a schermo unico e passano tutte da HOME. Lo dichiara il chiamante, non il
+      // template, perché la parola che ne esce la legge il visitatore.
+      published
     >
-      <a className="skip-link" href={`#contenuto-${surface}`}>
-        Salta al contenuto
-      </a>
-      <ShellTopbar handle={config.identity.handle} published />
-      <main id={`contenuto-${surface}`} className="shell-content">
-        <p className="eyebrow">{config.identity.name}</p>
-        <h1>{label}</h1>
-        {children}
-      </main>
-      <SurfaceNav site={site} current={surface} />
-    </section>
+      {children}
+    </SiteTemplateSurface>
   );
 }
 
