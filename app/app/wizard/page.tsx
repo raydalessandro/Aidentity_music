@@ -77,7 +77,7 @@ export default async function WizardPage({
   return (
     <main className={styles.page}>
       <div className={styles.shell}>
-        <div className={styles.controlIntro} data-control-intro>
+        <div className={styles.controlIntro}>
           <div>
             <p className={styles.eyebrow}>AIDENTITY / CONTROL ROOM</p>
             <p className={styles.controlCopy}>Il motore salva in continuo. Tu lavora sul risultato.</p>
