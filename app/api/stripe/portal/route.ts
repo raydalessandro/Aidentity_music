@@ -12,10 +12,8 @@ export const dynamic = "force-dynamic";
 const profileRowSchema = z.object({ stripe_customer_id: z.string().nullable() });
 
 /**
- * Customer portal Stripe: l'owner cambia piano, aggiorna il metodo di
- * pagamento o disdice. Nessuna di quelle azioni cambia lo stato di
- * pubblicazione qui: il portale produce eventi, e sono gli eventi a passare
- * dal webhook.
+ * Customer portal Stripe: al termine si torna al Control Room, non alla landing.
+ * Le modifiche del portale continuano a entrare nel lifecycle soltanto via webhook.
  */
 export async function POST(): Promise<NextResponse> {
   const supabase = await createSupabaseServerClient();
@@ -43,7 +41,7 @@ export async function POST(): Promise<NextResponse> {
 
   const session = await createStripeClient().billingPortal.sessions.create({
     customer: customerId,
-    return_url: `${readSiteUrl()}/`,
+    return_url: `${readSiteUrl()}/app/wizard?billing=portal`,
   });
 
   return NextResponse.json({ url: session.url }, { status: 200 });

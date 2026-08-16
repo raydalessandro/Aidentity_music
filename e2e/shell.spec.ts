@@ -54,10 +54,13 @@ test("le quattro palette sono accessibili e semanticamente pulite", async ({ pag
 test("la radice ha un ingresso accessibile", async ({ page }) => {
   await page.goto("/");
 
-  const landing = page.locator(".landing");
+  // `[data-landing]` e non `.landing`: da quando la landing usa un CSS module la
+  // classe in pagina porta un hash generato, che non e' un contratto. Il gancio
+  // dichiarato lo e', ed e' lo stesso idioma di `data-palette` e `data-surface`.
+  const landing = page.locator("[data-landing]");
   await expect(landing).toHaveCount(1);
 
-  const results = await new AxeBuilder({ page }).include(".landing").analyze();
+  const results = await new AxeBuilder({ page }).include("[data-landing]").analyze();
   expect(results.violations, "axe sulla landing").toEqual([]);
 
   // L'ingresso deve essere raggiungibile da tastiera e portare all'accesso, non solo esistere.
