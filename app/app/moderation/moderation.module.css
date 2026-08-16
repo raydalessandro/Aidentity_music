@@ -1,0 +1,17 @@
+/* Rifinitura deliberatamente assente: Ray l'ha chiesta dopo, in branch separate.
+   Qui c'è il minimo perché la tabella sia leggibile e i controlli distinguibili. */
+.page { min-height: 100vh; padding: 24px; background: #0d0d0d; color: #f5f2ea; font-family: Arial, Helvetica, sans-serif; }
+.title { font-size: clamp(28px, 5vw, 48px); margin: 0 0 16px; }
+.notice { max-width: 72ch; margin: 0 0 20px; padding: 12px 14px; border-left: 3px solid #ccff00; background: #1b1c14; }
+.notice[data-tone="rifiuto"] { border-left-color: #ff9e9e; background: #211414; }
+.empty { color: #c8c0b5; }
+.table { width: 100%; border-collapse: collapse; }
+.caption { max-width: 90ch; margin-bottom: 12px; color: #c8c0b5; text-align: left; font-size: 13px; }
+.table th, .table td { padding: 10px; border-bottom: 1px solid #35322f; text-align: left; vertical-align: top; }
+.reason { color: #c8c0b5; }
+.actions { display: grid; gap: 12px; }
+.form { display: grid; gap: 6px; }
+.label { font-size: 12px; color: #c8c0b5; }
+.textarea { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #4b4742; border-radius: 6px; background: #0d0d0d; color: #fff; resize: vertical; }
+.button { padding: 8px 12px; border: 1px solid #68625b; border-radius: 999px; background: #211f1c; color: #fff; cursor: pointer; }
+.button:focus-visible { outline: 3px solid #ccff00; outline-offset: 2px; }
