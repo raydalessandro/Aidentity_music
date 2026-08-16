@@ -83,44 +83,43 @@ describe("builder mobile live", () => {
   });
 });
 
-describe("il sito resta visibile mentre si modifica", () => {
-  // Difetto segnalato da Ray al primo giro su telefono: il foglio dei controlli
-  // non scendeva abbastanza e il sito sotto non si vedeva — «cambia il nome ma
-  // si vede per metà». La causa non era la misura del foglio: era che il
-  // palcoscenico restava alto `100dvh` e veniva coperto dal basso, quindi la
-  // hero di Unica (alta quanto lo schermo) finiva tagliata a metà.
+describe("o si guarda il sito, o si lavora", () => {
+  // Il primo modello sovrapponeva un foglio scorrevole al sito, ed e' stato
+  // provato su telefono: il sito veniva disegnato a schermo intero e coperto dal
+  // basso, quindi la hero di Unica si vedeva a meta'. Il secondo tentativo — dare
+  // al foglio un'altezza propria con scorrimento interno — ha spostato il
+  // problema: la barra dei passi finiva a galleggiare dentro una finestrella.
   //
-  // L'invariante da presidiare non è «58dvh»: è che l'altezza del foglio aperto
-  // e lo spazio lasciato al sito vengano dalla STESSA sorgente. Due numeri
-  // scritti in due punti tornerebbero a divergere, ed è esattamente così che il
-  // difetto è nato.
+  // Il modello attuale, deciso da Ray, toglie il problema invece di spostarlo:
+  // due modi che si escludono e un solo comando che li commuta.
   const css = source("app", "app", "wizard", "live-builder.module.css");
+  const wizard = source("app", "app", "wizard", "WizardClient.tsx");
 
-  it("le due altezze del foglio sono dichiarate una volta sola", () => {
-    expect(css).toMatch(/--sheet-open:\s*\d+dvh;/u);
-    expect(css).toMatch(/--sheet-closed:\s*\d+px;/u);
+  it("mentre si lavora il sito non e' coperto a meta': e' proprio assente", () => {
+    expect(css).toMatch(/\.builder\[data-editing="true"\] \.stage \{[^}]*display:\s*none/u);
   });
 
-  it("il palcoscenico si restringe leggendo la stessa variabile del foglio", () => {
-    expect(css).toMatch(
-      /\.stage\[data-editing="true"\]\s*\{[^}]*height:\s*calc\(100dvh - var\(--sheet-open\)\)/u,
-    );
+  it("mentre si guarda il sito i controlli non sono coperti a meta': sono assenti", () => {
+    expect(css).toMatch(/\.builder\[data-editing="false"\] \.sheet \{[^}]*display:\s*none/u);
   });
 
-  it("aperto il foglio non si sovrappone al sito", () => {
-    // Con il palcoscenico già ristretto, un margine negativo lo ricoprirebbe:
-    // sarebbe il difetto di prima, tornato per un'altra strada.
-    const apertura = /\.sheet\s*\{[^}]*\}/u.exec(css)?.[0] ?? "";
-    expect(apertura).toContain("min-height: var(--sheet-open)");
-    expect(apertura).toMatch(/margin-top:\s*0;/u);
+  it("il tasto che apre il pannello NON vive dentro il pannello", () => {
+    // L'invariante di prodotto: se il comando stesse dentro il foglio, chiuderlo
+    // nasconderebbe anche il modo di riaprirlo.
+    const toggle = wizard.indexOf("data-builder-toggle");
+    const sheet = wizard.indexOf("data-builder-sheet");
+    expect(toggle).toBeGreaterThanOrEqual(0);
+    expect(sheet).toBeGreaterThanOrEqual(0);
+    expect(toggle, "il toggle deve precedere il foglio nel markup").toBeLessThan(sheet);
   });
 
-  it("chiuso invece sì: il sito torna a schermo intero sotto la maniglia", () => {
-    const chiusura = /\.sheet\[data-expanded="false"\]\s*\{[^}]*\}/u.exec(css)?.[0] ?? "";
-    expect(chiusura).toContain("calc(-1 * var(--sheet-closed))");
+  it("i controlli scorrono con la pagina, non dentro una finestrella", () => {
+    // Era la causa della barra dei passi che galleggiava a meta' schermo.
+    expect(css).not.toMatch(/\.body \{[^}]*max-height/u);
+    expect(css).not.toMatch(/\.body \{[^}]*overflow-y:\s*auto/u);
   });
 
-  it("i controlli scorrono dentro il foglio, non oltre lo schermo", () => {
-    expect(css).toMatch(/max-height:\s*calc\(var\(--sheet-open\) - \d+px\)/u);
+  it("il bersaglio del comando e' comodo per un pollice", () => {
+    expect(css).toMatch(/\.barToggle \{[^}]*min-height:\s*44px/u);
   });
 });

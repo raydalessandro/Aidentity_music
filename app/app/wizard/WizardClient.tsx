@@ -297,8 +297,38 @@ export default function WizardClient({ initial, userId }: { initial: WizardIniti
   }
 
   return (
-    <div className={liveStyles.builder} data-live-builder>
-      <section className={liveStyles.stage} data-builder-stage data-editing={editorOpen}>
+    <div className={liveStyles.builder} data-live-builder data-editing={editorOpen}>
+      {/*
+        La barra vive FUORI dal foglio, e non e' un dettaglio di impaginazione: il
+        tasto che apre il pannello non puo' stare dentro il pannello, altrimenti
+        chiuderlo nasconde anche il modo di riaprirlo. Resta visibile in entrambi
+        gli stati.
+      */}
+      <header className={liveStyles.bar}>
+        <span className={liveStyles.barCopy}>
+          <strong>{steps.find((item) => item.id === step)?.label ?? "Modifica"}</strong>
+          <small data-save-state={saveState}>
+            {saveState === "saving"
+              ? "salvataggio…"
+              : saveState === "saved"
+                ? "salvato"
+                : saveState === "error"
+                  ? "errore salvataggio"
+                  : `/${site.slug}`}
+          </small>
+        </span>
+        <button
+          className={liveStyles.barToggle}
+          data-builder-toggle
+          type="button"
+          aria-expanded={editorOpen}
+          onClick={() => setEditorOpen((current) => !current)}
+        >
+          {editorOpen ? "Vedi sito" : "Modifica"}
+        </button>
+      </header>
+
+      <section className={liveStyles.stage} data-builder-stage>
         <div className={liveStyles.viewport} data-builder-preview aria-label="Anteprima live del sito">
           <SiteTemplateHome
             config={config}
@@ -311,30 +341,7 @@ export default function WizardClient({ initial, userId }: { initial: WizardIniti
         </div>
       </section>
 
-      <section className={liveStyles.sheet} data-builder-sheet data-expanded={editorOpen}>
-        <button
-          className={liveStyles.handle}
-          data-builder-toggle
-          type="button"
-          aria-expanded={editorOpen}
-          onClick={() => setEditorOpen((current) => !current)}
-        >
-          <span className={liveStyles.grip} aria-hidden="true" />
-          <span className={liveStyles.handleCopy}>
-            <strong>{steps.find((item) => item.id === step)?.label ?? "Modifica"}</strong>
-            <small data-save-state={saveState}>
-              {saveState === "saving"
-                ? "salvataggio…"
-                : saveState === "saved"
-                  ? "salvato"
-                  : saveState === "error"
-                    ? "errore salvataggio"
-                    : `/${site.slug}`}
-            </small>
-          </span>
-          <span className={liveStyles.handleAction}>{editorOpen ? "Vedi sito" : "Modifica"}</span>
-        </button>
-
+      <section className={liveStyles.sheet} data-builder-sheet>
         <div className={liveStyles.body}>
           <header className={styles.head}>
             <div>

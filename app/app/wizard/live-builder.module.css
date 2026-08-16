@@ -1,28 +1,84 @@
 .builder {
   /*
-   * Le due altezze del foglio vivono qui, in un posto solo. Il palcoscenico le
-   * legge per sapere quanto spazio gli resta: due numeri scritti in due punti
-   * diversi tornerebbero a divergere, ed e' esattamente cosi' che il sito
-   * finiva coperto.
+   * Due modi che si escludono, non un pannello che scorre sopra il sito.
+   * Il modello a sovrapposizione e' stato provato su telefono e non reggeva:
+   * il sito veniva disegnato a schermo intero e coperto dal basso, quindi la
+   * hero di Unica si vedeva a meta'. Qui o si guarda il sito, o si lavora, e
+   * la barra in cima commuta fra i due.
    */
-  --sheet-open: 58dvh;
-  --sheet-closed: 92px;
+  --bar: 56px;
   position: relative;
   min-width: 0;
 }
 
-.stage {
+.bar {
   position: sticky;
   top: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: var(--bar);
+  padding: 8px 14px;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--panel) 96%, transparent);
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(18px);
+}
+
+.barCopy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.barCopy strong {
+  color: var(--ink);
+  font-size: 13px;
+  letter-spacing: -.01em;
+}
+
+.barCopy small {
+  overflow: hidden;
+  color: var(--muted);
+  font: 700 10px/1.2 ui-monospace, monospace;
+  letter-spacing: .04em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.barToggle {
+  flex: 0 0 auto;
+  /* Bersaglio comodo per il pollice: e' l'unico comando sempre presente. */
+  min-height: 44px;
+  padding: 0 18px;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line2);
+  font: 900 11px/1 ui-monospace, monospace;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.barToggle:hover, .barToggle:focus-visible {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+.stage {
+  position: sticky;
+  top: var(--bar);
   z-index: 0;
-  height: 100dvh;
+  height: calc(100dvh - var(--bar));
   overflow: hidden;
   background: var(--bg);
 }
 
 .viewport {
   height: 100%;
-  overflow-y: auto;
+  overflow: hidden;
   overscroll-behavior: contain;
   scrollbar-width: none;
 }
@@ -32,118 +88,27 @@
 }
 
 /*
- * Mentre si modifica, la preview è il fondale vivo e non un secondo pannello
- * scrollabile sotto le dita. La preview stessa è esplicitamente non interattiva:
- * nessun <a> può fingere una navigazione di superficie e smontare il player.
+ * I due stati si escludono. Nessuno dei due nasconde l'altro a meta': o il sito
+ * occupa lo schermo, o lo occupano i controlli, che scorrono con la pagina come
+ * qualunque modulo — niente scorrimento dentro lo scorrimento.
  */
-/*
- * Mentre il foglio e' aperto il sito non viene disegnato a schermo intero e poi
- * nascosto: occupa la banda che gli resta davvero. Era il difetto segnalato da
- * Ray al primo giro su telefono — la hero di Unica e' alta quanto lo schermo, il
- * foglio ne copriva il 62% dal basso, e il nome si vedeva a meta'. Componendo
- * nello spazio reale, la hero ci sta dentro per intero.
- */
-.stage[data-editing="true"] {
-  height: calc(100dvh - var(--sheet-open));
+.builder[data-editing="true"] .stage {
+  display: none;
 }
 
-.stage[data-editing="true"] .viewport {
-  overflow: hidden;
+.builder[data-editing="false"] .sheet {
+  display: none;
 }
 
 .sheet {
   position: relative;
   z-index: 50;
-  min-height: var(--sheet-open);
-  /* Aperto NON si sovrappone: il palcoscenico si e' gia' ristretto. */
-  margin-top: 0;
-  overflow: clip;
   color: var(--ink);
-  background: color-mix(in srgb, var(--panel) 96%, transparent);
-  border-top: 1px solid var(--line);
-  border-radius: 24px 24px 0 0;
-  box-shadow: 0 -24px 70px rgba(0, 0, 0, .5);
-  backdrop-filter: blur(18px);
-}
-
-/*
- * Chiuso invece si sovrappone: il sito torna a schermo intero e resta solo la
- * maniglia sopra il bordo inferiore.
- */
-.sheet[data-expanded="false"] {
-  min-height: var(--sheet-closed);
-  margin-top: calc(-1 * var(--sheet-closed));
-}
-
-.handle {
-  position: sticky;
-  top: 0;
-  z-index: 12;
-  width: 100%;
-  min-height: 76px;
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px 12px;
-  color: var(--ink);
-  background: color-mix(in srgb, var(--panel) 96%, transparent);
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  text-align: left;
-  backdrop-filter: blur(18px);
-}
-
-.grip {
-  width: 28px;
-  height: 4px;
-  border-radius: 999px;
-  background: var(--muted);
-}
-
-.handleCopy {
-  min-width: 0;
-  display: grid;
-  gap: 4px;
-}
-
-.handleCopy strong {
-  overflow: hidden;
-  font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.handleCopy small {
-  color: var(--muted);
-  font: 800 9px/1 ui-monospace, monospace;
-  letter-spacing: .07em;
-  text-transform: uppercase;
-}
-
-.handleCopy small[data-save-state="saving"],
-.handleCopy small[data-save-state="error"] {
-  color: var(--ink);
-}
-
-.handleAction {
-  color: var(--ink);
-  font: 900 9px/1 ui-monospace, monospace;
-  letter-spacing: .08em;
-  text-transform: uppercase;
+  background: var(--panel);
 }
 
 .body {
-  /* Il foglio ha un'altezza finita: i controlli scorrono al suo interno invece
-     di spingere il palcoscenico fuori dallo schermo. */
-  max-height: calc(var(--sheet-open) - 76px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
   padding: 0 14px 28px;
-}
-
-.sheet[data-expanded="false"] .body {
-  display: none;
 }
 
 @media (max-width: 899px) {
@@ -195,11 +160,25 @@
 }
 
 @media (min-width: 900px) {
+  /*
+   * Da 900px in su non c'e' nulla da commutare: il foglio e' una colonna accanto
+   * al sito e si vedono entrambi. La barra sparisce perche' il suo unico comando
+   * qui non serve, e i due stati che si escludono vengono annullati per nome.
+   */
   .builder {
     display: grid;
     grid-template-columns: minmax(390px, .9fr) minmax(430px, 1.1fr);
     gap: 20px;
     align-items: start;
+  }
+
+  .bar {
+    display: none;
+  }
+
+  .builder[data-editing="true"] .stage,
+  .builder[data-editing="false"] .sheet {
+    display: block;
   }
 
   .stage {
@@ -210,41 +189,17 @@
     border: 1px solid var(--line);
   }
 
-  /*
-   * Da 900px in su il foglio e' una colonna accanto al sito, non un pannello che
-   * sale: il palcoscenico non deve restringersi e i controlli non devono
-   * scorrere dentro un'altezza pensata per il telefono. `[data-editing]` ha
-   * specificita' maggiore di `.stage`, quindi va neutralizzato per nome.
-   */
-  .stage[data-editing="true"] {
-    height: calc(100dvh - 36px);
-  }
-
-  .stage[data-editing="true"] .viewport {
+  .viewport {
     overflow-y: auto;
   }
 
-  .sheet,
-  .sheet[data-expanded="false"] {
+  .sheet {
     grid-column: 1;
     grid-row: 1;
-    min-height: 0;
-    margin-top: 0;
     border: 1px solid var(--line);
-    border-radius: 0;
-  }
-
-  .sheet[data-expanded="false"] .body {
-    display: block;
-  }
-
-  .handle {
-    display: none;
   }
 
   .body {
-    max-height: none;
-    overflow-y: visible;
     padding: 0;
   }
 }
