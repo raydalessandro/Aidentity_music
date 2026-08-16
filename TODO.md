@@ -84,6 +84,67 @@ presupposto di niente in questa fase.
 
 ---
 
+## 1-quater. Il template, pagina per pagina
+
+La base del template è buona, ma sopra non c'è ancora niente. Metodo deciso da Ray: **una
+branch per pagina, ognuna con la sua preview**, guardata su un telefono vero prima di
+passare alla successiva. Insieme solo quando due voci si tengono davvero. Il costruttore si
+sistema **dopo**: con il template finito diventa molto più semplice.
+
+**La radice comune delle prime tre voci**, verificata leggendo le due anteprime: sia
+`app/preview/[token]/page.tsx` (link 24h) sia `app/app/wizard/preview/[siteId]/page.tsx`
+rendono `SiteTemplateHome` **senza `destination`** — cioè in modalità anteprima, dove il dock
+punta ad ancore — e poi **impilano sotto** l'inventario della bozza e l'EPK nella stessa
+pagina. Il sito pubblicato invece ha rotte vere (`/slug/feed`, `/slug/listen`, …) e il dock ci
+porta. Quindi non sono tre difetti del template: è un'anteprima che non assomiglia al sito.
+
+| # | Voce | Criterio di chiusura |
+|---|---|---|
+| 1 | **Le anteprime sono una pagina sola; il sito no** | Nelle parole di Ray: «il template ancora scorre su tutte le pagine e non le divide come da menu: cliccando scorre e ti manda dove c'è quella sezione, invece di essere sezioni a sé». Chiusa quando le anteprime rendono le superfici attraverso il `Surface` del template, con una navigazione che cambia superficie invece di scorrere — e quando un banco dimostra che l'anteprima e il pubblicato mostrano **le stesse superfici**, non due strutture diverse. `ShellDestination` distingue già i due mondi: il pezzo che manca è una destinazione d'anteprima che navighi. |
+| 2 | **La HOME apre ogni vista dell'anteprima** | «La home è fissa all'inizio di tutte le pagine e dovrebbe stare solo nel feed» (parole di Ray, da riprecisare quando ci arriviamo: HOME come superficie fra le altre, non intestazione fissa di tutto). Stessa causa della voce 1. Chiusa quando la HOME è una superficie raggiungibile, non il cappello di ogni schermata. |
+| 3 | **Nessun player nelle anteprime** | Le tracce caricate compaiono nel link 24h ma non si ascoltano: il player vero (`PlayerBar` + `PlayerProvider`) vive in `app/[slug]/layout.tsx`, quindi esiste **solo sul sito pubblicato**. Ray propone di prendere il player da `raydalessandro/spotimai`. Attenzione al confine, che non è CSS: nel link 24h i media non hanno una strada autorizzata — `/api/wizard/preview-asset/[assetId]` richiede la sessione owner. Chiusa quando le anteprime hanno un player funzionante **e** una route media che autorizza per token senza allargare quella owner, con il test che dimostra che un token scaduto o revocato non serve byte. |
+| 4 | **Le foto non entrano nel FEED dall'interfaccia** | «Non carica ancora le foto nel feed, o almeno non c'è possibilità in UI». La capacità esiste — passo *Contenuti* → carica asset, poi *Feed* → «Post visuale» — ma è in fondo a un modulo lungo, e nelle anteprime il FEED non è reso come superficie, quindi l'esito non si vede. È la stessa regola che il pubblicato applica: un asset caricato da solo non compare nel FEED, serve un post (vedi `lib/site-visuals.ts`). Chiusa quando dal wizard si aggiunge una foto al FEED in pochi passi evidenti **e** la si vede comparire nell'anteprima. |
+| 5 | **Il costruttore, dopo** | Deciso da Ray: prima il template finito, poi il costruttore. Le voci del builder restano in §1-ter. |
+
+### La direzione che scioglie le voci 1, 2 e 3
+
+Decisa da Ray: **l'anteprima non è una copia del sito, è il sito** — «potrebbe direttamente
+essere il sito stesso che useranno». Non un renderer parallelo da tenere allineato a mano, ma
+lo stesso identico percorso servito con un'autorizzazione diversa:
+
+| chi guarda | cosa cambia |
+|---|---|
+| visitatore | `anon`, solo siti `published`, proiezioni `public_*` |
+| owner | sessione, legge la propria bozza |
+| link 24h | token, legge quella bozza finché il link vive |
+
+Il renderer, le superfici, la navigazione e il player restano **gli stessi tre volte**. È la
+regola che questo repository ha già imparato due volte a sue spese — il dock che puntava
+altrove sul sito pubblicato (#26) e la ribbon che divergeva fra anteprima e pubblicato (#36):
+**due strade per la stessa cosa divergono sempre**, e a scoprirlo è l'artista.
+
+Conseguenza pratica sul confine dei media: non serve inventare un'autorizzazione nuova per il
+player nelle anteprime, serve **una sola strada verso i byte con tre modi di autorizzarla**.
+Il criterio della voce 3 resta quello: un token scaduto o revocato non serve byte, dimostrato
+da un test.
+
+### Un'ipotesi considerata e scartata, con la ragione
+
+Per risolvere l'autorizzazione del link 24h era emersa l'idea di **cancellare i dati dei siti
+creati e non acquistati dopo 24 ore**: senza dati, un link vecchio non trova niente. Scartata
+da Ray nello stesso momento in cui l'ha proposta, e la ragione va scritta perché l'idea non
+torni: un artista che rientra dopo tre giorni e trova il proprio lavoro sparito non ricomincia
+— se ne va. La durata della prova si allunga; la cancellazione non è la leva.
+
+Resta aperto, come **decisione di prodotto e non tecnica**: quanto dura la prova per un sito
+mai acquistato, e cosa succede allo scadere. Lo schema oggi sa già essere umano con chi
+disdice — `subscription_ended_at` e `purge_after = ended_at + 90 giorni` — ma **non dice nulla**
+su una bozza mai pagata. Chiusa quando la regola esiste, è scritta dove l'artista la legge
+prima di lavorare, e la sua esecuzione è quella di §1 (avvisi a 60 e 80 giorni, purga
+idempotente), non una cancellazione silenziosa.
+
+---
+
 ## 2. Debito dichiarato, non bloccante
 
 | Voce | Criterio di chiusura |
