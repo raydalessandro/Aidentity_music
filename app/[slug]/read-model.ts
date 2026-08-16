@@ -5,6 +5,7 @@
 import type { SiteConfig } from "../../lib/contract";
 import { siteConfigSchema } from "../../lib/contract";
 import { shellPalettes, type ShellPalette } from "../../components/site-shell/palettes";
+import type { ShellDestination, ShellSurfaceId } from "../../components/site-shell/SiteShell";
 import { classifySlug } from "./slug";
 import type { EmbedProvider, PublicSiteRow, PublicTrackRow, SiteReader } from "./site-reader";
 
@@ -184,6 +185,19 @@ export type SurfaceView = {
 
 export function surfaceHref(slug: string, surface: SurfaceId): string {
   return surface === "home" ? `/${slug}` : `/${slug}/${surface}`;
+}
+
+/**
+ * Gli href che il dock del guscio deve seguire su un sito pubblicato.
+ *
+ * Vive qui e non nella pagina perché questo modulo è già il proprietario degli indirizzi
+ * delle superfici: `surfaceHref` sta dieci righe più su, e due sorgenti di verità per lo
+ * stesso indirizzo sono esattamente il difetto che stiamo chiudendo — il dock puntava
+ * altrove rispetto a `SurfaceNav`, e nessuno se ne accorgeva perché nessuno confrontava i due.
+ */
+export function publishedDestination(site: { readonly surfaces: readonly SurfaceView[] }): ShellDestination {
+  const hrefs = Object.fromEntries(site.surfaces.map((surface) => [surface.id, surface.href])) as Record<ShellSurfaceId, string>;
+  return { kind: "pubblicato", hrefs };
 }
 
 export function buildSurfaces(config: SiteConfig, slug: string): readonly SurfaceView[] {

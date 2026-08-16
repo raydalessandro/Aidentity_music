@@ -14,14 +14,35 @@ Queste non sono migliorie. Sono le cose che, se restano com'è, si manifestano *
 prodotto davanti a un utente reale** — e alcune non si vedono in CI, perché la CI gira su uno stack
 locale che non ha gli stessi default del cloud.
 
+> Il primo deploy su Vercel è avvenuto. Fatte: la configurazione dell'ambiente ospitato e gli URL
+> di reindirizzo dell'autenticazione. Restano aperte le altre quattro voci della tabella: il limite
+> di upload del progetto ospitato, il testo alternativo delle immagini, i job di retention e la
+> registrazione del webhook Stripe — che resta la più urgente, perché è l'unico scrittore di
+> `sites.publication_status` e finché manca un pagamento valido non pubblica nulla, in silenzio.
+
 | Voce | Perché prima del deploy | Criterio di chiusura |
 |---|---|---|
-| **Configurazione dell'ambiente ospitato** | L'applicazione senza variabili risponde 500 su ogni superficie: `readSiteUrl` e i client Supabase falliscono alla costruzione. Non è un difetto del codice, ma il primo caricamento della home lo sembra. | Su Vercel sono impostate `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_SITE_URL`, `SUPABASE_SERVICE_ROLE_KEY` e le sei `STRIPE_*` in modalità test. `NEXT_PUBLIC_SITE_URL` è il dominio vero, non un indirizzo di loopback. |
+| **Configurazione dell'ambiente ospitato** | L'applicazione senza variabili risponde 500 su ogni superficie: `readSiteUrl` e i client Supabase falliscono alla costruzione. Non è un difetto del codice, ma il primo caricamento della home lo sembra. | Su Vercel sono impostate `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_SITE_URL`, `SUPABASE_SERVICE_ROLE_KEY` e le **otto** `STRIPE_*` in modalità test: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` e le sei `STRIPE_PRICE_{BASE,PRO,MAX}_{MONTH,YEAR}` elencate in `.env.example`. (Questa riga diceva «sei»: erano solo quelle dei prezzi, e mancavano all'appello le due che contano di più.) `NEXT_PUBLIC_SITE_URL` è il dominio vero, non un indirizzo di loopback, e `STRIPE_SECRET_KEY` deve iniziare per `sk_test_` — `createStripeClient` rifiuta qualunque altra forma, per scelta di v1. |
 | **Limite di upload del progetto ospitato** | `supabase/config.toml` governa **solo** lo stack locale e la CI. Il progetto cloud ha un limite proprio, e finché resta sotto i 256 MiB una traccia grande viene rifiutata dallo Storage con un errore che non nasce dal nostro codice. | Il limite globale del progetto è ≥ `268435456` byte, cioè il `file_size_limit` del bucket `site-tracks`. Verificato caricando davvero una traccia oltre i 50 MiB. |
 | **URL di reindirizzo dell'autenticazione** | Supabase valida `emailRedirectTo` contro una lista. Se il callback con la query `?next=…` non corrisponde, il magic link **funziona** ma riporta sempre alla home: l'utente entra e perde la destinazione, e sembra un difetto dell'applicazione. | Nella dashboard Supabase, `Site URL` è il dominio di produzione e la lista dei Redirect URLs contiene il callback. Verificato accedendo da `/login?next=/app/wizard` e atterrando sul wizard. |
 | **Immagini senza testo alternativo** | `site_assets` non ha `alt`, né larghezza, né altezza. Ora che le immagini vengono rese davvero, ogni `<img>` di HOME e FEED esce senza alternativa testuale: è una barriera per chi usa uno screen reader, e axe la segnalerà sulla prima superficie pubblica con una foto. | Lo schema porta un testo alternativo per asset, il wizard lo raccoglie come campo obbligatorio per gli asset visibili, il renderer lo usa, e un test e2e con axe passa su una pagina che contiene almeno un'immagine reale. |
 | **Retention: avvisi e purge non esistono** | La migrazione del billing valorizza correttamente `subscription_ended_at` e `purge_after = ended_at + 90 giorni`, ma **non c'è nulla che li esegua**. Un sito disdetto oggi accumula una data di purga che nessuno onora: gli avvisi a 60 e 80 giorni non partono e al giorno 90 gli oggetti Storage restano. È un impegno verso l'utente, non solo pulizia. | Esiste un'esecuzione periodica che manda gli avvisi a 60 e 80 giorni, e al giorno 90 elimina gli oggetti Storage, scrive `assets_purged_at` e conserva la riga come tombstone, con un test che dimostra l'idempotenza (eseguirla due volte non cancella due volte, e non tocca un sito ripubblicato nel frattempo). |
-| **Registrazione del webhook Stripe** | Il webhook è l'unico scrittore di `sites.publication_status`. Se l'endpoint non è registrato sul dominio di produzione, un pagamento valido non pubblica niente e il sito resta in bozza senza che nulla lo segnali. | L'endpoint punta a `/api/stripe/webhook` sul dominio vero, il segreto di firma è impostato, e un pagamento con carta di test porta un sito da `draft` a `pending_review`. |
+| **Registrazione del webhook Stripe** | Il webhook è l'unico scrittore di `sites.publication_status`. Se l'endpoint non è registrato sul dominio di produzione, un pagamento valido non pubblica niente e il sito resta in bozza senza che nulla lo segnali. **La trappola non è la registrazione, è la scelta degli eventi**: `normalize.ts` accetta soltanto i cinque `customer.subscription.{created,updated,deleted,paused,resumed}` e **ignora** `checkout.session.completed`, che è la scelta istintiva in dashboard. Selezionando solo quello, Stripe mostra consegne riuscite (200 `ignored`) e nessun sito viene mai pubblicato: un guasto che si presenta come funzionamento. | L'endpoint punta a `/api/stripe/webhook` sul dominio vero — verificato: un `GET` risponde `405` con `x-matched-path: /api/stripe/webhook` — sono selezionati i **cinque** `customer.subscription.*`, il segreto di firma è in `STRIPE_WEBHOOK_SECRET` **e si è ri-deployato dopo averlo impostato** (su Vercel una variabile cambiata non raggiunge le funzioni già distribuite), e un pagamento con carta di test `4242 4242 4242 4242` porta un sito da `draft` a `pending_review`. |
+
+---
+
+## 1-bis. Perché sembri un prodotto
+
+Il funnel esiste per intero — login → wizard → sito → preview → `/slug` con le sue superfici — ma
+non ha una porta, e la porta di casa dell'artista non naviga. Tre punti, decisi con Ray, da fare
+**uno alla volta** con controllo visuale in preview fra l'uno e l'altro. Design essenziale: il
+lavoro di rifinitura viene dopo, in branch separate, a prodotto online.
+
+| # | Voce | Criterio di chiusura | Stato |
+|---|---|---|---|
+| 1 | **Il sito pubblicato smette di comportarsi da anteprima** | Il dock di `SiteShell` porta alle rotte (`/slug/feed`) e non alle ancore; una superficie spenta non compare invece di comparire con `aria-disabled`, che non impedisce la navigazione; la topbar non dice `PREVIEW` su un sito vero; il player segnaposto spento non affianca il `PlayerBar` reale. Dock e `SurfaceNav` leggono lo stesso `surfaceHref`. | chiusa da questa PR |
+| 2 | **La home ha una porta** | `app/page.tsx` oggi è il banco del filone A: quattro artisti finti, intestazione `FILONE A / GUSCIO THEMABLE`, e **zero** `href` in tutta la pagina — `/login` è raggiungibile solo digitandolo. Chiuso quando la radice è una landing con una promessa e un ingresso all'accesso, con lo showroom dei template sotto come dimostrazione. Nota: in preview il magic link non completa, perché gli URL delle deployment non sono nella allow-list dei redirect di Supabase. | aperta |
+| 3 | **Il webhook Stripe è registrato** | Vedi §1: senza, un pagamento valido non pubblica niente e il sito resta in bozza senza che nulla lo segnali. | aperta |
 
 ---
 

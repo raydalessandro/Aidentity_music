@@ -5,7 +5,7 @@ import { SiteShell } from "../../components/site-shell/SiteShell";
 import { baseUrl } from "../../lib/base-url";
 import { mediaUrl } from "../../lib/media/url";
 import { loadListen, loadSite } from "./composition";
-import { buildListenView } from "./read-model";
+import { buildListenView, publishedDestination } from "./read-model";
 import { isAllowedEmbed } from "./embed";
 import {
   UNAVAILABLE_METADATA,
@@ -53,6 +53,7 @@ export default async function HomeSurface({ params }: RouteParams) {
         palette={site.palette}
         previewId={site.slug}
         heroSrc={site.heroAssetId === null ? null : mediaUrl("asset", site.id, site.heroAssetId)}
+        destination={publishedDestination(site)}
       />
     </>
   );

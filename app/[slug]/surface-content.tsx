@@ -1,11 +1,13 @@
 // Presentazione delle superfici diverse da HOME.
 // HOME resta resa da `SiteShell` del filone A, consumata così com'è.
 //
-// Perché qui non c'è il dock: `SurfaceDock` di A costruisce href ad ancora
-// (`#feed-<previewId>`) e serve la pagina di anteprima a schermo unico; non sa produrre
-// `/[slug]/feed`. Non lo duplico e non lo modifico: uso una navigazione testuale minima e
-// chiedo nel report che A accetti gli href. La regola resta la stessa: una superficie spenta
-// non compare qui e non è raggiungibile via URL.
+// Perché qui non c'è il dock: `SurfaceDock` di A costruiva href ad ancora
+// (`#feed-<previewId>`) e serviva la pagina di anteprima a schermo unico; non sapeva produrre
+// `/[slug]/feed`. Non l'ho duplicato e non l'ho modificato: navigazione testuale minima, e la
+// richiesta che A accettasse gli href lasciata nel report. **A ora li accetta**
+// (`ShellDestination`), quindi HOME naviga davvero: questa nav resta come navigazione delle
+// superfici non-HOME, e le due leggono lo stesso `surfaceHref`. La regola non cambia: una
+// superficie spenta non compare qui e non è raggiungibile via URL.
 
 import Link from "next/link";
 
@@ -64,7 +66,7 @@ export function SurfaceShell({
       <a className="skip-link" href={`#contenuto-${surface}`}>
         Salta al contenuto
       </a>
-      <ShellTopbar handle={config.identity.handle} />
+      <ShellTopbar handle={config.identity.handle} published />
       <main id={`contenuto-${surface}`} className="shell-content">
         <p className="eyebrow">{config.identity.name}</p>
         <h1>{label}</h1>
