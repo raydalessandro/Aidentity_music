@@ -2,13 +2,13 @@
 
 ## Obiettivo
 
-`Unica` è il primo template reale di Aidentity. Nasce mobile-first per artisti emergenti che condividono il sito soprattutto da Instagram, TikTok, WhatsApp e DM. La reference visuale è il linguaggio già validato nel progetto NVLL CLICK: hero fotografico dominante, tipografia grande, navigazione persistente vicino al pollice, moduli editoriali e un ruolo centrale per l'ascolto.
+`Unica` è il primo template reale di Aidentity. È mobile-first e usa **NVLL CLICK come reference visuale diretta**, non come semplice ispirazione: topbar fissa, hero fotografico dominante, tipografia display estrema, griglia tecnica, dock persistente, player sopra il dock, moduli editoriali e ribbon visuale.
 
 Il template non aggiunge un secondo modello dati. Consuma il contratto Aidentity esistente e cambia soltanto la regia visuale.
 
-## Struttura da considerare stabile
+## Struttura stabile
 
-Tutti i template futuri devono continuare a offrire le stesse cinque superfici:
+Tutti i template continuano a offrire le stesse cinque superfici:
 
 - HOME
 - FEED
@@ -16,21 +16,26 @@ Tutti i template futuri devono continuare a offrire le stesse cinque superfici:
 - EPK
 - MERCH
 
+Il dock segue il contratto canonico:
+
+```text
+FEED    LISTEN    [ EPK ]    MERCH    HOME
+```
+
+**EPK è il tasto centrale.** In NVLL CLICK quella posizione è occupata da WORLD 00; in Aidentity la stessa geometria viene tradotta sulla superficie centrale del prodotto, senza cambiare il modello dati.
+
 La HOME di Unica ordina l'esperienza così:
 
-1. identità immediata: visual, nome, luogo/handle, claim;
-2. azione primaria: LISTEN;
-3. azione secondaria: FEED;
-4. tre porte editoriali verso LISTEN, FEED ed EPK;
-5. bio/manifesto;
-6. fascia visuale/decorativa;
-7. dock persistente.
+1. topbar / identità;
+2. hero visuale con nome, bio breve e CTA;
+3. tre porte editoriali verso LISTEN, FEED ed EPK;
+4. claim / manifesto e bio lunga;
+5. ribbon dei visual già presenti nel FEED;
+6. player e dock persistenti.
 
-LISTEN occupa il centro del dock. Per il target iniziale la musica è il centro percettivo; EPK rimane una superficie necessaria ma non guida la prima impressione.
+## Personalizzazione compatibile
 
-## Cosa può variare senza cambiare struttura
-
-Queste sono le leve di personalizzazione già compatibili con il contratto:
+Restano pienamente attive le leve già previste dal contratto:
 
 - nome, handle, claim, luogo, bio breve e lunga;
 - sette token colore della palette;
@@ -38,49 +43,30 @@ Queste sono le leve di personalizzazione già compatibili con il contratto:
 - famiglia icone;
 - grana;
 - visual principale;
-- superfici attive.
+- superfici attive;
+- etichette delle superfici.
 
-Le aree con `data-art-slot` sono punti di innesto intenzionali per i futuri set SVG componibili. Oggi hanno una decorazione neutra. Quando esisterà il catalogo SVG, il renderer potrà sostituirne il contenuto senza cambiare la geometria del template.
+La ribbon non introduce un nuovo campo persistito: riceve una proiezione render-ready degli asset `visual` che esistono già in `site_assets` e che sono referenziati dal FEED. Gli URL vengono derivati dalla route media usando `(site_id, asset_id)`, senza esporre `storage_path`.
 
-Slot iniziali:
+## Dato non ancora presente: alt testuale per asset
 
-- `hero-mark`
-- `rail-a`
-- `rail-b`
-- `rail-c`
-
-Il catalogo SVG non viene ancora persistito: prima va costruito un set reale e va definito il vocabolario da salvare. Stessa regola adottata per `templateId`: niente contratto prematuro.
-
-## Regola per i template successivi
-
-Un nuovo template non deve inventare un nuovo prodotto. Deve reinterpretare gli stessi dati e le stesse superfici.
-
-Esempi di variazione lecita:
-
-- differente composizione hero;
-- diversa scala tipografica;
-- differente uso di fotografia e SVG;
-- dock visualmente diverso;
-- ritmo verticale e densità differenti;
-- styling specifico di LISTEN / FEED / EPK / MERCH.
-
-Esempi da evitare:
-
-- campi dati richiesti da un solo template;
-- route esclusive di un template;
-- un player audio aggiuntivo;
-- CSS/HTML libero salvato dall'utente;
-- logica di pubblicazione dentro il template.
+`site_assets` v1 non persiste un testo alternativo editoriale. Il renderer usa quindi fallback contestuali (`Visual di <artista>`, caption del post, `Render merch N`). Se in futuro si vuole rendere l'alt modificabile dall'artista, quello è un emendamento del modello dati e va trattato separatamente dal template.
 
 ## Builder mobile
 
-Il builder dovrà mostrare il template mentre viene modificato. Su mobile non va simulato un telefono dentro il telefono: il renderer occupa il viewport e i controlli entrano come pannello / bottom sheet sopra la preview.
+Il builder mostra il template mentre viene modificato. Su mobile non simula un telefono dentro il telefono: il renderer occupa il viewport e i controlli entrano come pannello / bottom sheet sopra la preview.
 
-Ordine UX previsto:
+Ordine UX:
 
 1. Nome e identità
 2. Stile
 3. Visual + musica
 4. Press kit
 
-Quando arriverà il secondo template, la scelta non dovrebbe essere obbligatoria all'inizio. L'artista deve poter vedere gli altri template già popolati con i propri dati e cambiare stile a posteriori.
+Quando arriverà un secondo template, la scelta non dovrà essere obbligatoria all'inizio: l'artista deve poter vedere altri layout già popolati con i propri dati e cambiare stile a posteriori.
+
+## Regola per i template successivi
+
+Un nuovo template non inventa un nuovo prodotto. Reinterpreta gli stessi dati e le stesse superfici.
+
+Sono lecite variazioni di composizione, scala tipografica, uso di fotografia/SVG, dock, ritmo verticale e styling delle superfici. Restano da evitare campi richiesti da un solo template, route esclusive, un secondo player audio, CSS/HTML libero salvato dall'utente o logica di pubblicazione dentro il template.

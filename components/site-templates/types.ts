@@ -14,6 +14,17 @@ export const DEFAULT_SITE_TEMPLATE_ID: SiteTemplateId = "unica";
 
 export type SiteTemplateSurfaceId = ShellConfig["surfaces"][number]["id"];
 
+/**
+ * Visual già risolto dal chiamante. Non aggiunge dati persistiti al template: è solo la
+ * proiezione render-ready degli asset che Aidentity possiede già.
+ */
+export type SiteTemplateVisual = {
+  id: string;
+  src: string;
+  alt: string;
+  caption?: string | null;
+};
+
 export type SiteTemplateHomeProps = {
   config: ShellConfig;
   palette: ShellPalette;
@@ -24,6 +35,8 @@ export type SiteTemplateHomeProps = {
    */
   destination?: ShellDestination;
   heroSrc?: string | null;
+  /** Visual derivati dagli asset esistenti, usati dalla ribbon stile NVLL CLICK. */
+  visuals?: readonly SiteTemplateVisual[];
   /** Contiene il chrome nel box quando il template vive in showroom/builder. */
   embedded?: boolean;
   /** False nel live builder: il template rende, ma non finge navigazione fra superfici. */
@@ -47,6 +60,8 @@ export type SiteTemplateSurfaceProps = {
   navigation: readonly SiteTemplateNavItem[];
   /** Il chiamante decide se è pubblico: il template decide soltanto come mostrarlo. */
   published: boolean;
+  /** Hero già mediato dalla route media, utile alle superfici visuali. */
+  heroSrc?: string | null;
   children: ReactNode;
 };
 

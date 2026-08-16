@@ -40,6 +40,20 @@ export default async function OwnerPreviewPage({ params }: { params: Promise<{ s
   const heroSrc = configResult.data?.hero_asset_id
     ? `/api/wizard/preview-asset/${configResult.data.hero_asset_id}`
     : null;
+  const captionByAsset = new Map(
+    (posts.data ?? [])
+      .filter((post) => post.kind === "visual" && post.visual_asset_id)
+      .map((post) => [post.visual_asset_id!, post.caption] as const),
+  );
+  const visuals = (assets.data ?? [])
+    .filter((asset) => asset.kind === "visual")
+    .slice(0, 5)
+    .map((asset) => ({
+      id: asset.id,
+      src: `/api/wizard/preview-asset/${asset.id}`,
+      alt: `Visual draft ${asset.id.slice(0, 8)}`,
+      caption: captionByAsset.get(asset.id) ?? "VISUAL",
+    }));
 
   return (
     <SiteTemplateHome
@@ -47,6 +61,7 @@ export default async function OwnerPreviewPage({ params }: { params: Promise<{ s
       palette={paletteForDraft(parsed.data)}
       previewId={previewId}
       heroSrc={heroSrc}
+      visuals={visuals}
     >
       <DraftContentPreview
         config={parsed.data}
