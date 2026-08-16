@@ -82,3 +82,45 @@ describe("builder mobile live", () => {
     expect(route).toContain('Cache-Control", "private, no-store"');
   });
 });
+
+describe("il sito resta visibile mentre si modifica", () => {
+  // Difetto segnalato da Ray al primo giro su telefono: il foglio dei controlli
+  // non scendeva abbastanza e il sito sotto non si vedeva — «cambia il nome ma
+  // si vede per metà». La causa non era la misura del foglio: era che il
+  // palcoscenico restava alto `100dvh` e veniva coperto dal basso, quindi la
+  // hero di Unica (alta quanto lo schermo) finiva tagliata a metà.
+  //
+  // L'invariante da presidiare non è «58dvh»: è che l'altezza del foglio aperto
+  // e lo spazio lasciato al sito vengano dalla STESSA sorgente. Due numeri
+  // scritti in due punti tornerebbero a divergere, ed è esattamente così che il
+  // difetto è nato.
+  const css = source("app", "app", "wizard", "live-builder.module.css");
+
+  it("le due altezze del foglio sono dichiarate una volta sola", () => {
+    expect(css).toMatch(/--sheet-open:\s*\d+dvh;/u);
+    expect(css).toMatch(/--sheet-closed:\s*\d+px;/u);
+  });
+
+  it("il palcoscenico si restringe leggendo la stessa variabile del foglio", () => {
+    expect(css).toMatch(
+      /\.stage\[data-editing="true"\]\s*\{[^}]*height:\s*calc\(100dvh - var\(--sheet-open\)\)/u,
+    );
+  });
+
+  it("aperto il foglio non si sovrappone al sito", () => {
+    // Con il palcoscenico già ristretto, un margine negativo lo ricoprirebbe:
+    // sarebbe il difetto di prima, tornato per un'altra strada.
+    const apertura = /\.sheet\s*\{[^}]*\}/u.exec(css)?.[0] ?? "";
+    expect(apertura).toContain("min-height: var(--sheet-open)");
+    expect(apertura).toMatch(/margin-top:\s*0;/u);
+  });
+
+  it("chiuso invece sì: il sito torna a schermo intero sotto la maniglia", () => {
+    const chiusura = /\.sheet\[data-expanded="false"\]\s*\{[^}]*\}/u.exec(css)?.[0] ?? "";
+    expect(chiusura).toContain("calc(-1 * var(--sheet-closed))");
+  });
+
+  it("i controlli scorrono dentro il foglio, non oltre lo schermo", () => {
+    expect(css).toMatch(/max-height:\s*calc\(var\(--sheet-open\) - \d+px\)/u);
+  });
+});

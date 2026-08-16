@@ -1,4 +1,12 @@
 .builder {
+  /*
+   * Le due altezze del foglio vivono qui, in un posto solo. Il palcoscenico le
+   * legge per sapere quanto spazio gli resta: due numeri scritti in due punti
+   * diversi tornerebbero a divergere, ed e' esattamente cosi' che il sito
+   * finiva coperto.
+   */
+  --sheet-open: 58dvh;
+  --sheet-closed: 92px;
   position: relative;
   min-width: 0;
 }
@@ -28,6 +36,17 @@
  * scrollabile sotto le dita. La preview stessa è esplicitamente non interattiva:
  * nessun <a> può fingere una navigazione di superficie e smontare il player.
  */
+/*
+ * Mentre il foglio e' aperto il sito non viene disegnato a schermo intero e poi
+ * nascosto: occupa la banda che gli resta davvero. Era il difetto segnalato da
+ * Ray al primo giro su telefono — la hero di Unica e' alta quanto lo schermo, il
+ * foglio ne copriva il 62% dal basso, e il nome si vedeva a meta'. Componendo
+ * nello spazio reale, la hero ci sta dentro per intero.
+ */
+.stage[data-editing="true"] {
+  height: calc(100dvh - var(--sheet-open));
+}
+
 .stage[data-editing="true"] .viewport {
   overflow: hidden;
 }
@@ -35,8 +54,9 @@
 .sheet {
   position: relative;
   z-index: 50;
-  min-height: 62dvh;
-  margin-top: -62dvh;
+  min-height: var(--sheet-open);
+  /* Aperto NON si sovrappone: il palcoscenico si e' gia' ristretto. */
+  margin-top: 0;
   overflow: clip;
   color: var(--ink);
   background: color-mix(in srgb, var(--panel) 96%, transparent);
@@ -46,9 +66,13 @@
   backdrop-filter: blur(18px);
 }
 
+/*
+ * Chiuso invece si sovrappone: il sito torna a schermo intero e resta solo la
+ * maniglia sopra il bordo inferiore.
+ */
 .sheet[data-expanded="false"] {
-  min-height: 92px;
-  margin-top: -92px;
+  min-height: var(--sheet-closed);
+  margin-top: calc(-1 * var(--sheet-closed));
 }
 
 .handle {
@@ -110,6 +134,11 @@
 }
 
 .body {
+  /* Il foglio ha un'altezza finita: i controlli scorrono al suo interno invece
+     di spingere il palcoscenico fuori dallo schermo. */
+  max-height: calc(var(--sheet-open) - 76px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0 14px 28px;
 }
 
@@ -181,6 +210,16 @@
     border: 1px solid var(--line);
   }
 
+  /*
+   * Da 900px in su il foglio e' una colonna accanto al sito, non un pannello che
+   * sale: il palcoscenico non deve restringersi e i controlli non devono
+   * scorrere dentro un'altezza pensata per il telefono. `[data-editing]` ha
+   * specificita' maggiore di `.stage`, quindi va neutralizzato per nome.
+   */
+  .stage[data-editing="true"] {
+    height: calc(100dvh - 36px);
+  }
+
   .stage[data-editing="true"] .viewport {
     overflow-y: auto;
   }
@@ -204,6 +243,8 @@
   }
 
   .body {
+    max-height: none;
+    overflow-y: visible;
     padding: 0;
   }
 }
