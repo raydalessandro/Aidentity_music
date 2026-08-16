@@ -1,48 +1,40 @@
 "use server";
 
-import { z } from "zod";
+import { redirect } from "next/navigation";
 
-import { readSiteUrl } from "@/lib/supabase/public-env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-import { magicLinkRedirect } from "../_lib/magic-link-redirect";
+import { safeRedirectPath } from "../_lib/safe-redirect";
+import {
+  MESSAGGIO_CREDENZIALI_ERRATE,
+  credenzialiPerAccesso,
+  type StatoAccesso,
+} from "../_lib/credenziali";
 
-export type MagicLinkState = {
-  status: "idle" | "sent" | "error";
-  message: string;
-};
-
-export const initialMagicLinkState: MagicLinkState = { status: "idle", message: "" };
-
-const emailSchema = z.email();
+// ATTENZIONE, e' costato un 500 in produzione: da qui si esportano SOLTANTO
+// funzioni asincrone. Tipi e costanti stanno in `../_lib/credenziali.ts`, e
+// `use-server-exports.test.ts` impedisce che tornino qui.
 
 /**
- * Richiesta del magic link.
+ * Accesso con email e password.
  *
- * La risposta e' deliberatamente identica per un indirizzo esistente e per uno
- * inesistente: la pagina di accesso non e' un oracolo che dice chi e' iscritto.
+ * Il messaggio di fallimento e' uno solo, identico per indirizzo sconosciuto e
+ * per password sbagliata: un messaggio diverso trasformerebbe il form in un
+ * elenco degli iscritti, interrogabile da chiunque un indirizzo alla volta.
  */
-export async function requestMagicLink(
-  _previous: MagicLinkState,
-  formData: FormData,
-): Promise<MagicLinkState> {
-  const email = emailSchema.safeParse(formData.get("email"));
-  if (!email.success) {
-    return { status: "error", message: "Inserisci un indirizzo email valido." };
-  }
+export async function accedi(_precedente: StatoAccesso, formData: FormData): Promise<StatoAccesso> {
+  const lette = credenzialiPerAccesso(formData);
+  if (!lette.ok) return { status: "error", message: lette.message };
 
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.auth.signInWithOtp({
-    email: email.data,
-    options: { emailRedirectTo: magicLinkRedirect(formData.get("next")) },
-  });
+  const { error } = await supabase.auth.signInWithPassword(lette.credenziali);
 
   if (error) {
-    console.error("[auth] invio magic link fallito", { code: error.code });
+    // Il codice nel log, mai nella risposta.
+    console.error("[auth] accesso fallito", { code: error.code });
+    return { status: "error", message: MESSAGGIO_CREDENZIALI_ERRATE };
   }
 
-  return {
-    status: "sent",
-    message: "Se l'indirizzo e' valido riceverai un link di accesso. Controlla la posta.",
-  };
+  const grezzo = formData.get("next");
+  redirect(typeof grezzo === "string" ? safeRedirectPath(grezzo) : "/app/wizard");
 }

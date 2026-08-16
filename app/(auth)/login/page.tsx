@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
+import { CredentialForm } from "../_lib/CredentialForm";
 import { safeRedirectPath } from "../_lib/safe-redirect";
-import { LoginForm } from "./LoginForm";
+import { accedi } from "./actions";
 
 export const metadata: Metadata = {
   title: "Accedi — AIDENTITY",
-  description: "Accesso senza password tramite link inviato per email.",
+  description: "Accesso al pannello AIDENTITY.",
 };
 
 /**
@@ -22,12 +24,16 @@ export default async function LoginPage({
   // di sceglierne uno, perche' scegliere sarebbe una regola che l'attaccante
   // conosce quanto noi.
   const next = typeof grezzo === "string" ? safeRedirectPath(grezzo) : undefined;
+  const versoRegistrazione = next === undefined ? "/signup" : `/signup?next=${encodeURIComponent(next)}`;
 
   return (
-    <main>
-      <h1>Accedi ad AIDENTITY</h1>
-      <p>Nessuna password: si entra con un link valido una volta sola.</p>
-      <LoginForm next={next} />
+    <main className="auth">
+      <p className="auth-eyebrow">AIDENTITY</p>
+      <h1 className="auth-titolo">Accedi</h1>
+      <CredentialForm azione={accedi} etichetta="Accedi" registrazione={false} next={next} />
+      <p className="auth-alternativa">
+        Non hai ancora un account? <Link href={versoRegistrazione}>Creane uno</Link>.
+      </p>
     </main>
   );
 }

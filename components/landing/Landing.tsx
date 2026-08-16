@@ -12,8 +12,13 @@ import Link from "next/link";
  * ingresso. La rifinitura è lavoro a sé, a prodotto online.
  */
 
-/** L'ingresso porta al wizard, non alla radice: chi accede sta venendo a costruire. */
-export const LANDING_ENTRY_HREF = "/login?next=/app/wizard";
+/**
+ * L'ingresso porta alla REGISTRAZIONE e non all'accesso: chi arriva qui per la
+ * prima volta un account non ce l'ha, e mandarlo su `/login` gli chiederebbe una
+ * password che non ha mai scelto. Da `/signup` si raggiunge `/login` in un clic,
+ * con `next` conservato; il contrario costava un passaggio in piu' a tutti.
+ */
+export const LANDING_ENTRY_HREF = "/signup?next=/app/wizard";
 
 export function Landing() {
   return (
