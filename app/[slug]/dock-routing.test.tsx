@@ -131,6 +131,54 @@ describe("l'anteprima resta quello che era", () => {
   });
 });
 
+describe("l'anteprima navigabile è il sito, servita a chi non l'ha ancora pubblicato", () => {
+  // Decisione di Ray: «potrebbe direttamente essere il sito stesso che useranno». La terza
+  // destinazione porta gli href come il pubblicato — quindi il dock naviga e le superfici
+  // sono pagine a sé — ma non è pubblicata, e non deve fingere di esserlo.
+  function homeNavigabile(site: SiteView, base: string): string {
+    const hrefs = Object.fromEntries(
+      (["feed", "listen", "epk", "merch", "home"] as const).map((surface) => [
+        surface,
+        surface === "home" ? base : `${base}/${surface}`,
+      ]),
+    ) as Record<"feed" | "listen" | "epk" | "merch" | "home", string>;
+
+    return renderToStaticMarkup(
+      <SiteTemplateHome
+        config={site.config}
+        palette={site.palette}
+        previewId={site.slug}
+        destination={{ kind: "anteprima-navigabile", hrefs }}
+      />,
+    );
+  }
+
+  it("il dock porta alle pagine dell'anteprima, non alle ancore", async () => {
+    const markup = homeNavigabile(await siteView("nvll-click"), "/app/wizard/preview/abc");
+
+    expect(markup).toContain('href="/app/wizard/preview/abc/feed"');
+    expect(markup).toContain('href="/app/wizard/preview/abc/listen"');
+    expect(markup).toContain('href="/app/wizard/preview/abc"');
+    expect(markup).not.toContain("#feed-nvll-click");
+  });
+
+  it("continua a dichiararsi anteprima: naviga come il sito, non finge di esserlo", async () => {
+    // È l'invariante che questa terza forma poteva rompere: portare gli href e diventare
+    // per sbaglio «pubblicato» agli occhi di chi guarda.
+    expect(homeNavigabile(await siteView("nvll-click"), "/preview/tok")).toContain("PREVIEW");
+  });
+
+  it("una superficie spenta non compare: cliccarla porterebbe a una pagina che non esiste", async () => {
+    // Il caso che DEVE essere rifiutato. `miriam-serra` ha MERCH spenta nella fixture.
+    const markup = homeNavigabile(await siteView("miriam-serra"), "/preview/tok");
+
+    expect(markup).not.toContain('href="/preview/tok/merch"');
+    expect(markup).not.toContain("aria-disabled");
+    // Se il dock sparisse del tutto le righe sopra resterebbero verdi: ci pensa questa.
+    expect(markup).toContain('href="/preview/tok/feed"');
+  });
+});
+
 describe("un sito pubblicato non si presenta come un'anteprima", () => {
   it("la topbar non dice PREVIEW", async () => {
     expect(homePubblicata(await siteView("nvll-click"))).not.toContain("PREVIEW");
