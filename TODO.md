@@ -106,6 +106,43 @@ porta. Quindi non sono tre difetti del template: è un'anteprima che non assomig
 | 4 | **Le foto non entrano nel FEED dall'interfaccia** | «Non carica ancora le foto nel feed, o almeno non c'è possibilità in UI». La capacità esiste — passo *Contenuti* → carica asset, poi *Feed* → «Post visuale» — ma è in fondo a un modulo lungo, e nelle anteprime il FEED non è reso come superficie, quindi l'esito non si vede. È la stessa regola che il pubblicato applica: un asset caricato da solo non compare nel FEED, serve un post (vedi `lib/site-visuals.ts`). Chiusa quando dal wizard si aggiunge una foto al FEED in pochi passi evidenti **e** la si vede comparire nell'anteprima. |
 | 5 | **Il costruttore, dopo** | Deciso da Ray: prima il template finito, poi il costruttore. Le voci del builder restano in §1-ter. |
 
+### La direzione che scioglie le voci 1, 2 e 3
+
+Decisa da Ray: **l'anteprima non è una copia del sito, è il sito** — «potrebbe direttamente
+essere il sito stesso che useranno». Non un renderer parallelo da tenere allineato a mano, ma
+lo stesso identico percorso servito con un'autorizzazione diversa:
+
+| chi guarda | cosa cambia |
+|---|---|
+| visitatore | `anon`, solo siti `published`, proiezioni `public_*` |
+| owner | sessione, legge la propria bozza |
+| link 24h | token, legge quella bozza finché il link vive |
+
+Il renderer, le superfici, la navigazione e il player restano **gli stessi tre volte**. È la
+regola che questo repository ha già imparato due volte a sue spese — il dock che puntava
+altrove sul sito pubblicato (#26) e la ribbon che divergeva fra anteprima e pubblicato (#36):
+**due strade per la stessa cosa divergono sempre**, e a scoprirlo è l'artista.
+
+Conseguenza pratica sul confine dei media: non serve inventare un'autorizzazione nuova per il
+player nelle anteprime, serve **una sola strada verso i byte con tre modi di autorizzarla**.
+Il criterio della voce 3 resta quello: un token scaduto o revocato non serve byte, dimostrato
+da un test.
+
+### Un'ipotesi considerata e scartata, con la ragione
+
+Per risolvere l'autorizzazione del link 24h era emersa l'idea di **cancellare i dati dei siti
+creati e non acquistati dopo 24 ore**: senza dati, un link vecchio non trova niente. Scartata
+da Ray nello stesso momento in cui l'ha proposta, e la ragione va scritta perché l'idea non
+torni: un artista che rientra dopo tre giorni e trova il proprio lavoro sparito non ricomincia
+— se ne va. La durata della prova si allunga; la cancellazione non è la leva.
+
+Resta aperto, come **decisione di prodotto e non tecnica**: quanto dura la prova per un sito
+mai acquistato, e cosa succede allo scadere. Lo schema oggi sa già essere umano con chi
+disdice — `subscription_ended_at` e `purge_after = ended_at + 90 giorni` — ma **non dice nulla**
+su una bozza mai pagata. Chiusa quando la regola esiste, è scritta dove l'artista la legge
+prima di lavorare, e la sua esecuzione è quella di §1 (avvisi a 60 e 80 giorni, purga
+idempotente), non una cancellazione silenziosa.
+
 ---
 
 ## 2. Debito dichiarato, non bloccante
