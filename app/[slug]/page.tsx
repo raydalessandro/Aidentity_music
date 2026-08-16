@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { SiteTemplateHome } from "../../components/site-templates/SiteTemplate";
 import { baseUrl } from "../../lib/base-url";
 import { mediaUrl } from "../../lib/media/url";
+import { ribbonVisuals } from "../../lib/site-visuals";
 import { loadFeed, loadListen, loadSite } from "./composition";
 import { buildListenView, publishedDestination } from "./read-model";
 import { isAllowedEmbed } from "./embed";
@@ -32,20 +33,12 @@ export default async function HomeSurface({ params }: RouteParams) {
   const [listenRecords, feed] = await Promise.all([loadListen(site.id), loadFeed(site.id)]);
   const listen = buildListenView(listenRecords.tracks, isAllowedEmbed);
   const jsonLd = buildMusicGroupJsonLd(site, baseUrl(), { tracks: listen.tracks });
-  const captionByAsset = new Map(
-    feed.posts
-      .filter((post) => post.kind === "visual" && post.visual_asset_id !== null)
-      .map((post) => [post.visual_asset_id!, post.caption] as const),
+  const visuals = ribbonVisuals(
+    feed.assets,
+    feed.posts,
+    (asset) => asset.public_url,
+    (asset) => asset.alt ?? `Visual di ${site.config.identity.name}`,
   );
-  const visuals = feed.assets
-    .filter((asset) => asset.kind === "visual")
-    .slice(0, 5)
-    .map((asset) => ({
-      id: asset.id,
-      src: asset.public_url,
-      alt: asset.alt ?? `Visual di ${site.config.identity.name}`,
-      caption: captionByAsset.get(asset.id) ?? "VISUAL",
-    }));
 
   return (
     <>

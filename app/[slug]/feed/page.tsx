@@ -33,6 +33,12 @@ export default async function FeedSurface({ params }: RouteParams) {
                 </article>
               );
             }
+            // Un post `visual` senza immagine non deve presentarsi come traccia: non lo è.
+            // `public_posts` lo esclude alla radice (`p.kind <> 'visual' or va.id is not
+            // null`), ma post e asset arrivano da due query distinte: una purga fra le due
+            // basta a far cadere qui un post visuale. In quel caso non si racconta niente.
+            if (post.kind === "visual") return null;
+
             return (
               <article className="feed-card feed-type" key={post.id} data-post={post.kind}>
                 <small>{String(index + 1).padStart(2, "0")} / TRACK</small>
