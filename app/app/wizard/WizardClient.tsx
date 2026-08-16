@@ -3,11 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { shellPalettes } from "@/components/site-shell/palettes";
-import { SiteTemplateHome } from "@/components/site-templates/SiteTemplate";
 import { siteConfigDraftSchema, siteConfigSchema, type SiteConfigDraft } from "@/lib/contract";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { createEmbedTrack, uploadAsset, uploadTrack, type AssetKind, type EmbedProvider } from "@/lib/wizard/media-client";
-import { paletteForDraft, themeFromPalette } from "@/lib/wizard/palette";
+import { themeFromPalette } from "@/lib/wizard/palette";
 import type {
   WizardContact,
   WizardDate,
@@ -19,7 +18,6 @@ import type {
   WizardPreviewLink,
 } from "@/lib/wizard/types";
 
-import liveStyles from "./live-builder.module.css";
 import styles from "./wizard.module.css";
 
 type Step = "identity" | "theme" | "content" | "epk";
@@ -129,7 +127,6 @@ export default function WizardClient({ initial, userId }: { initial: WizardIniti
 
   const completeConfig = config ? siteConfigSchema.safeParse(config).success : false;
   const publishableDraft = completeConfig && Boolean(heroAssetId);
-  const liveHeroSrc = heroAssetId ? `/api/wizard/preview-asset/${heroAssetId}` : null;
 
   function patchIdentity(key: keyof SiteConfigDraft["identity"], value: string) {
     if (!config || key === "locale") return;
@@ -296,168 +293,118 @@ export default function WizardClient({ initial, userId }: { initial: WizardIniti
   }
 
   return (
-    <div className={liveStyles.builder} data-live-builder>
-      {/*
-        La barra vive FUORI dal foglio e porta il solo dato che non si puo'
-        perdere di vista mentre si scrive: se il salvataggio automatico e'
-        andato a buon fine. Su telefono l'intestazione del pannello e' nascosta,
-        quindi questa e' l'unica riga che lo dice.
-      */}
-      <header className={liveStyles.bar}>
-        <span className={liveStyles.barCopy}>
-          <strong>{steps.find((item) => item.id === step)?.label ?? "Modifica"}</strong>
-          <small data-save-state={saveState}>
-            {saveState === "saving"
-              ? "salvataggio…"
-              : saveState === "saved"
-                ? "salvato"
-                : saveState === "error"
-                  ? "errore salvataggio"
-                  : `/${site.slug}`}
-          </small>
-        </span>
+    <>
+      <header className={styles.head}>
+        <div>
+          <p className={styles.eyebrow}>AIDENTITY / BUILDER</p>
+          <h1 className={styles.title}>Costruisci il tuo sito.</h1>
+          <p className={styles.muted}>Draft: /{site.slug}</p>
+        </div>
+        <div>
+          <p className={styles.status}>autosave: <strong>{saveState}</strong></p>
+          <p className={styles.status}>{publishableDraft ? "config + hero complete" : "draft ancora incompleto"}</p>
+        </div>
       </header>
 
-      {/*
-        Il sito NON si guarda qui dentro. Si guarda con «Apri pagina completa»,
-        che lo apre a schermo pieno in una pagina sua: senza barre sopra, senza
-        controlli accanto, esattamente come lo vedra' chi riceve il link — e si
-        torna a lavorare chiudendo la scheda.
+      <nav className={styles.steps} aria-label="Passi del wizard">
+        {steps.map((item) => (
+          <button key={item.id} type="button" className={styles.step} data-active={step === item.id} onClick={() => setStep(item.id)}>
+            <strong>{item.label}</strong><br /><small>{item.help}</small>
+          </button>
+        ))}
+      </nav>
 
-        Quello che resta qui e' uno sfondo: la home vera, costruita dalla config
-        in memoria, dove si vede cambiare il nome, i colori, i caratteri e
-        comparire la hero. Non e' interattiva e non deve esserlo. Il foglio dei
-        controlli viene DOPO, nel flusso normale della pagina: non gli sta sopra,
-        quindi non puo' tagliare a meta' la hero come faceva il primo modello.
-      */}
-      <section className={liveStyles.stage} data-builder-stage>
-        <div className={liveStyles.viewport} data-builder-preview aria-label="Anteprima live del sito">
-          <SiteTemplateHome
-            config={config}
-            palette={paletteForDraft(config)}
-            previewId={`builder-${site.id}`}
-            heroSrc={liveHeroSrc}
-            embedded
-            interactive={false}
-          />
+      {error && <div className={`${styles.notice} ${styles.error}`} role="alert">{error}</div>}
+
+      {step === "identity" && <IdentityStep siteSlug={site.slug} config={config} patchIdentity={patchIdentity} updateSlug={updateSlug} />}
+      {step === "theme" && (
+        <ThemeStep
+          config={config}
+          setConfig={setConfig}
+          patchSectionCopy={patchSectionCopy}
+          toggleSurface={toggleSurface}
+        />
+      )}
+      {step === "content" && (
+        <ContentStep
+          siteId={site.id}
+          assets={assets}
+          tracks={tracks}
+          posts={posts}
+          heroAssetId={heroAssetId}
+          setHero={setHero}
+          addAsset={addMediaAsset}
+          addTrack={addTrack}
+          insertRow={insertRow}
+          deleteRow={deleteRow}
+          setPosts={setPosts}
+        />
+      )}
+      {step === "epk" && (
+        <EpkStep
+          siteId={site.id}
+          userId={userId}
+          links={links}
+          press={press}
+          dates={dates}
+          metrics={metrics}
+          contacts={contacts}
+          insertRow={insertRow}
+          deleteRow={deleteRow}
+          setLinks={setLinks}
+          setPress={setPress}
+          setDates={setDates}
+          setMetrics={setMetrics}
+          setContacts={setContacts}
+        />
+      )}
+
+      <section className={styles.panel}>
+        <h2>Preview</h2>
+        <p className={styles.muted}>
+          La preview owner richiede login. Il link temporaneo contiene un token casuale; nel database resta solo SHA-256, con scadenza e revoca.
+        </p>
+        <div className={styles.actions}>
+          <button className={`${styles.button} ${styles.primary}`} type="button" onClick={() => void openOwnerPreview()}>Apri preview owner</button>
+          <button className={styles.button} type="button" onClick={() => void createPreviewLink()}>Crea link 24h</button>
         </div>
-      </section>
-
-      <section className={liveStyles.sheet} data-builder-sheet>
-        <div className={liveStyles.body}>
-          <header className={styles.head}>
-            <div>
-              <p className={styles.eyebrow}>AIDENTITY / BUILDER</p>
-              <h1 className={styles.title}>Costruisci il tuo sito.</h1>
-              <p className={styles.muted}>Draft: /{site.slug}</p>
-            </div>
-            <div>
-              <p className={styles.status}>autosave: <strong>{saveState}</strong></p>
-              <p className={styles.status}>{publishableDraft ? "config + hero complete" : "draft ancora incompleto"}</p>
-            </div>
-          </header>
-
-          <nav className={styles.steps} aria-label="Passi del wizard">
-            {steps.map((item) => (
-              <button key={item.id} type="button" className={styles.step} data-active={step === item.id} onClick={() => setStep(item.id)}>
-                <strong>{item.label}</strong><br /><small>{item.help}</small>
-              </button>
-            ))}
-          </nav>
-
-          {error && <div className={`${styles.notice} ${styles.error}`} role="alert">{error}</div>}
-
-          {step === "identity" && <IdentityStep siteSlug={site.slug} config={config} patchIdentity={patchIdentity} updateSlug={updateSlug} />}
-          {step === "theme" && (
-            <ThemeStep
-              config={config}
-              setConfig={setConfig}
-              patchSectionCopy={patchSectionCopy}
-              toggleSurface={toggleSurface}
-            />
-          )}
-          {step === "content" && (
-            <ContentStep
-              siteId={site.id}
-              assets={assets}
-              tracks={tracks}
-              posts={posts}
-              heroAssetId={heroAssetId}
-              setHero={setHero}
-              addAsset={addMediaAsset}
-              addTrack={addTrack}
-              insertRow={insertRow}
-              deleteRow={deleteRow}
-              setPosts={setPosts}
-            />
-          )}
-          {step === "epk" && (
-            <EpkStep
-              siteId={site.id}
-              userId={userId}
-              links={links}
-              press={press}
-              dates={dates}
-              metrics={metrics}
-              contacts={contacts}
-              insertRow={insertRow}
-              deleteRow={deleteRow}
-              setLinks={setLinks}
-              setPress={setPress}
-              setDates={setDates}
-              setMetrics={setMetrics}
-              setContacts={setContacts}
-            />
-          )}
-
-          <section className={styles.panel}>
-            <h2>Condividi</h2>
-            <p className={styles.muted}>
-              Apri la pagina completa come la vedrà chi riceve il link, oppure crea un link temporaneo da inviare.
-            </p>
-            <div className={styles.actions}>
-              <button className={`${styles.button} ${styles.primary}`} type="button" onClick={() => void openOwnerPreview()}>Apri pagina completa</button>
-              <button className={styles.button} type="button" onClick={() => void createPreviewLink()}>Crea link 24h</button>
-            </div>
-            {shareUrl && (
-              <div className={styles.notice}>
-                <strong>Link appena creato</strong><br />
-                <a href={shareUrl} target="_blank" rel="noreferrer">{shareUrl}</a>
-              </div>
-            )}
-            <div className={styles.cards}>
-              {previewLinks.filter((link) => !link.revoked_at).map((link) => (
-                <div className={styles.card} key={link.id}>
-                  <div className={styles.cardRow}>
-                    <span>Scade {new Date(link.expires_at).toLocaleString("it-IT")}</span>
-                    <button className={`${styles.button} ${styles.danger}`} type="button" onClick={() => void revokePreviewLink(link)}>Revoca</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <div className={styles.footerNav}>
-            <button
-              className={styles.button}
-              type="button"
-              disabled={step === "identity"}
-              onClick={() => setStep(steps[Math.max(0, steps.findIndex((item) => item.id === step) - 1)]!.id)}
-            >
-              Indietro
-            </button>
-            <button
-              className={`${styles.button} ${styles.primary}`}
-              type="button"
-              disabled={step === "epk"}
-              onClick={() => setStep(steps[Math.min(steps.length - 1, steps.findIndex((item) => item.id === step) + 1)]!.id)}
-            >
-              Continua
-            </button>
+        {shareUrl && (
+          <div className={styles.notice}>
+            <strong>Link appena creato</strong><br />
+            <a href={shareUrl} target="_blank" rel="noreferrer">{shareUrl}</a>
           </div>
+        )}
+        <div className={styles.cards}>
+          {previewLinks.filter((link) => !link.revoked_at).map((link) => (
+            <div className={styles.card} key={link.id}>
+              <div className={styles.cardRow}>
+                <span>Scade {new Date(link.expires_at).toLocaleString("it-IT")}</span>
+                <button className={`${styles.button} ${styles.danger}`} type="button" onClick={() => void revokePreviewLink(link)}>Revoca</button>
+              </div>
+            </div>
+          ))}
         </div>
       </section>
-    </div>
+
+      <div className={styles.footerNav}>
+        <button
+          className={styles.button}
+          type="button"
+          disabled={step === "identity"}
+          onClick={() => setStep(steps[Math.max(0, steps.findIndex((item) => item.id === step) - 1)]!.id)}
+        >
+          Indietro
+        </button>
+        <button
+          className={`${styles.button} ${styles.primary}`}
+          type="button"
+          disabled={step === "epk"}
+          onClick={() => setStep(steps[Math.min(steps.length - 1, steps.findIndex((item) => item.id === step) + 1)]!.id)}
+        >
+          Continua
+        </button>
+      </div>
+    </>
   );
 }
 
