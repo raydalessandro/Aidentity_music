@@ -1,3 +1,4 @@
+import { Landing } from "../components/landing/Landing";
 import { SiteShell, type ShellConfig } from "../components/site-shell/SiteShell";
 import { shellPalettes } from "../components/site-shell/palettes";
 
@@ -25,5 +26,19 @@ const demoConfigs: readonly ShellConfig[] = [
 ];
 
 export default function GuscioThemable() {
-  return <div className="preview-stack"><header className="preview-intro"><p>FILONE A / GUSCIO THEMABLE</p><h1>Un layout. Identità multiple.</h1></header>{shellPalettes.map((palette, index) => <SiteShell key={palette.id} config={demoConfigs[index]!} palette={palette} previewId={palette.id} />)}</div>;
+  return <div className="preview-stack">
+    <Landing />
+    {/*
+      Lo showroom resta, e resta in modalità anteprima: è una dimostrazione, non quattro siti
+      pubblicati. Le ancore del dock e il badge `PREVIEW` qui sono corretti, ed è anche il
+      contratto che `e2e/shell.spec.ts` misura — quattro `[data-palette]`, ciascuno con il
+      proprio `.dock-center` e `.player-shell button` sopra 4.5:1.
+    */}
+    <header className="preview-intro" id="template">
+      <p>QUATTRO TEMPLATE</p>
+      <h2>Un layout. Identità multiple.</h2>
+      <p className="preview-nota">Cambiano colori, caratteri e icone. La struttura no.</p>
+    </header>
+    {shellPalettes.map((palette, index) => <SiteShell key={palette.id} config={demoConfigs[index]!} palette={palette} previewId={palette.id} />)}
+  </div>;
 }
