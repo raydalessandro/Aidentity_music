@@ -190,10 +190,15 @@
   width: 100%;
 }
 
+/* Il testo minuto NON usa `--acid`: il sistema di palette garantisce `acidInk`,
+   cioe' il testo leggibile SOPRA l'acid, non che l'acid sia leggibile COME testo.
+   Su `ember` l'acid e' scuro (#A8440B) e sul paper dava 3.03:1 — axe lo ha
+   segnalato. `--muted` non scende mai sotto 6.22 su paper ne' 7.91 su panel.
+   Vedi `palette-contrast.test.ts`. */
 .eyebrow {
   display: inline-block;
   margin: 0 0 12px;
-  color: var(--acid);
+  color: var(--muted);
   font: 850 9px/1.2 ui-monospace, monospace;
   letter-spacing: .18em;
   text-transform: uppercase;
@@ -276,7 +281,7 @@
 
 .module > span {
   grid-row: 1 / 3;
-  color: var(--acid);
+  color: var(--muted);
   font: 850 9px/1 ui-monospace, monospace;
 }
 
@@ -319,7 +324,7 @@
 .editorialCopy small {
   display: block;
   margin-top: 20px;
-  color: var(--acid);
+  color: var(--muted);
   font: 800 9px/1 ui-monospace, monospace;
   letter-spacing: .14em;
   text-transform: uppercase;
