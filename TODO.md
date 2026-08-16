@@ -50,6 +50,40 @@ terzo. Design essenziale per scelta: la rifinitura viene dopo, in branch separat
 
 ---
 
+## 1-ter. La fase artista: la pagina come casa, non come modulo
+
+Decisa da Ray dopo la #34, da costruire **a template definitivo** — non prima. L'obiettivo non è
+aggiungere schermate: è che l'artista entri, riconosca il posto, e cambi le sue cose come cambia un
+profilo social, senza sapere che sta compilando una configurazione.
+
+**La direzione di prodotto**, nelle parole di Ray: si parte da **un template unico che cambia faccia**
+con colori, nomi, font e SVG — tutte cose che scalano da sole perché sono già dati, non codice. Poi,
+progressivamente, **le immagini dell'artista diventano centrali e strutturali** nell'interfaccia, così
+la personalizzazione se la creano da soli invece di sceglierla da un elenco. Un'eventuale generazione
+di immagini via IA è un modulo che si appoggia sopra in un secondo momento, puntuale: non è un
+presupposto di niente in questa fase.
+
+**Quello che NON va rifatto** — verificato leggendo schema e rotte, non dedotto:
+
+- Le scritture dell'artista sono già multi-tenant e già permesse. `site_posts`, `site_links`,
+  `site_press`, `site_dates`, `site_metrics`, `site_contacts` hanno policy `for all` con
+  `with check(private.is_site_owner(site_id))`, e il wizard le scrive **già dal browser**. Una UI
+  in stile social sopra queste tabelle è interfaccia, non backend.
+- L'upload ha già il ciclo completo con prenotazione della quota (`/api/wizard/media/asset`,
+  `/api/wizard/media/track`): i byte vanno diretti allo Storage privato senza attraversare Next.
+- `profiles` ha `select` e `update` propri: l'area profilo è già permessa dalla RLS.
+- L'autofatturazione esiste già come rotte di checkout e portale Stripe.
+
+| Voce | Perché conta | Criterio di chiusura |
+|---|---|---|
+| **Non si può cancellare nulla di media** | `site_assets` e `site_tracks` hanno per il proprietario **soltanto `for select`** (nessun insert, update o delete dal client), e **nessuna rotta scrive `purged_at`**: la colonna esiste ma nell'applicazione compare solo come filtro `is("purged_at", null)`. In una interfaccia in stile social «elimina la foto» è la seconda cosa che chiunque prova. Non è un bottone mancante: cancellare deve **restituire la quota** in `site_usage` e purgare l'oggetto su Storage, altrimenti un artista che carica e cancella dieci volte esaurisce il piano senza avere nulla online. | Esiste una strada di cancellazione che scrive `purged_at`, libera i byte e i contatori in `site_usage` e rimuove l'oggetto dallo Storage, con un test che dimostra l'idempotenza (cancellare due volte non scala la quota due volte) e uno che dimostra che un proprietario non può purgare l'asset di un altro tenant. |
+| **Non si può riordinare né rinominare un media** | Stessa causa: le due tabelle sono in sola lettura per il proprietario. I post si riordinano (`sort_order` su tabella `for all`), le tracce e gli asset no. In un'interfaccia dove le immagini diventano strutturali, l'ordine **è** il layout. | Il proprietario può cambiare `sort_order` e i campi descrittivi dei propri asset e tracce, con la stessa disciplina della cancellazione: o via policy ristretta alle colonne sicure, o via rotta. Un test deve dimostrare che `storage_path`, `byte_size` e `purged_at` restano fuori dalla portata del client. |
+| **L'artista non può pubblicarsi da solo** | `sites.publication_status` si muove da due sole strade: `public.moderate_site` (che rifiuta chi non è platform admin) e `public.apply_billing_event` (eseguibile dal solo `service_role`, dal webhook Stripe). È una scelta deliberata di PR-0, ma se la pagina diventa il posto dove l'artista vive, lui vedrà «in attesa» e non avrà **nessun** comando: è il tipo di vicolo cieco che si scopre col primo utente vero. | La decisione è presa e scritta: o l'approvazione umana resta e l'interfaccia la racconta onestamente (stato, cosa manca, quanto ci vuole), o esiste una strada di autopubblicazione con le sue condizioni verificabili — e in quel caso L0.7 va emendata, perché oggi la moderazione precede la pubblicazione per contratto. |
+| **Dove vive l'editor** | `/[slug]` è sigillata di proposito: legge dalle proiezioni `public_*` e `app/[slug]/composition.test.ts` impedisce a quella cartella di raggiungere il client Supabase. Montare lì una modalità di modifica per il proprietario significa insegnare alla rotta pubblica cosa sia una sessione, cioè rinunciare all'isolamento che la rende veloce e verificabile. L'alternativa — l'editor resta in `/app/…` ma **smette di sembrare un modulo e diventa la loro pagina**, stesso template con le affordance di modifica sopra — è quella che il confine template già permette. | La scelta è scritta prima di aprire la prima branch di questa fase, con la ragione. Se vince l'editor dentro `/app/…`, `interactive={false}` (oggi senza chiamanti, §2) torna ad avere uno scopo ed esce dal debito. |
+| **Il merch oggi è una superficie, non un commercio** | Esistono il toggle della superficie `merch` e il tipo di asset `merch` (immagini di render). Non esiste **nessuna** tabella di prodotti, prezzi, disponibilità o ordini. Chiamare «merch» ciò che c'è oggi è corretto solo finché significa «una pagina con delle immagini». | Blocco a sé, dopo questa fase: quando il commercio servirà davvero, nasce con il proprio schema, la propria quota e il proprio rapporto con Stripe — che oggi conosce solo abbonamenti al prodotto, non vendite dell'artista. |
+
+---
+
 ## 2. Debito dichiarato, non bloccante
 
 | Voce | Criterio di chiusura |
