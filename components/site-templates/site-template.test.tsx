@@ -169,7 +169,11 @@ describe("le route restano dietro il confine template", () => {
     expect(source).not.toMatch(/import\s+\{[^}]*\bSiteShell\b/);
   });
 
-  it("solo la HOME pubblicata dichiara una destinazione", () => {
+  it("una sola pagina si dichiara pubblicata, ed è quella pubblica", () => {
+    // L'invariante della #26 non è «solo una pagina passa `destination`»: è che **nessuno
+    // oltre al sito pubblico possa dichiararsi pubblicato**. L'anteprima owner ora passa
+    // una destinazione — quella navigabile, che porta gli href senza dire di essere
+    // pubblicata — e questo banco misura la differenza invece di vietare la prop.
     const pubblicata = readFileSync(join(repoRoot, "app", "[slug]", "page.tsx"), "utf8");
     expect(pubblicata).toContain("destination={publishedDestination(site)}");
 
@@ -178,8 +182,24 @@ describe("le route restano dietro il confine template", () => {
       join("app", "app", "wizard", "preview", "[siteId]", "page.tsx"),
       join("app", "preview", "[token]", "page.tsx"),
     ]) {
-      expect(readFileSync(join(repoRoot, file), "utf8")).not.toContain("destination=");
+      const source = readFileSync(join(repoRoot, file), "utf8");
+      expect(source, `${file} non può dichiararsi pubblicato`).not.toContain('kind: "pubblicato"');
+      expect(source, `${file} non può usare la destinazione del sito pubblico`)
+        .not.toContain("publishedDestination(");
     }
+  });
+
+  it("l'anteprima owner naviga, e lo showroom no", () => {
+    // Le due forme non pubblicate non sono la stessa cosa: l'anteprima owner è il sito
+    // servito a chi non l'ha ancora pubblicato, lo showroom è una vetrina a schermo unico.
+    const owner = readFileSync(
+      join(repoRoot, "app", "app", "wizard", "preview", "[siteId]", "page.tsx"),
+      "utf8",
+    );
+    expect(owner).toContain('kind: "anteprima-navigabile"');
+
+    const showroom = readFileSync(join(repoRoot, "app", "page.tsx"), "utf8");
+    expect(showroom, "lo showroom resta a schermo unico").not.toContain("destination=");
   });
 
   it("surface-content continua a delegare il chrome", () => {
@@ -235,8 +255,13 @@ describe("navigare fra superfici non deve fermare la musica", () => {
     // componente `interactive` e il gancio del dock, e un'asserzione letterale si
     // era rotta per un attributo in mezzo — cioe' per una ragione che non c'entra
     // con l'invariante. Si verifica il ramo, non la sua punteggiatura.
-    const ramoPubblicato = /if \(published\)\s*\{\s*return <Link/u.test(sorgente);
-    expect(ramoPubblicato, "da pubblicato deve rendere un Link").toBe(true);
+    // Il ramo si chiamava `published` e ora si chiama `routed`, perché le destinazioni
+    // sono tre: lo showroom a schermo unico (ancore, `<a>`), l'anteprima navigabile e il
+    // sito pubblicato (rotte vere, `Link`). Ciò che il ramo distingue non è più «è
+    // pubblicato» ma «questo href è una rotta dell'app» — e un `Link` verso un'ancora
+    // ricaricherebbe la pagina, smontando il player persistente.
+    const ramoRotta = /if \(routed\)\s*\{\s*return <Link/u.test(sorgente);
+    expect(ramoRotta, "verso una rotta deve rendere un Link").toBe(true);
     expect(sorgente).toContain("aria-disabled");
   });
 });

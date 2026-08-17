@@ -30,13 +30,23 @@ function sectionLabel(config: SiteTemplateHomeProps["config"], id: ShellSurfaceI
   return config.sectionCopy[id]?.trim() || id.toUpperCase();
 }
 
+/**
+ * Se la destinazione porta gli href, si usano — sia sul sito pubblicato sia sull'anteprima
+ * navigabile, che è lo stesso sito servito a chi non l'ha ancora pubblicato. Le ancore
+ * restano solo dove servono davvero: lo showroom a schermo unico.
+ */
 function homeHref(
   destination: ShellDestination,
   surface: ShellSurfaceId,
   previewId: string,
 ): string {
-  if (destination.kind === "pubblicato") return destination.hrefs[surface];
+  if (destination.kind !== "anteprima") return destination.hrefs[surface];
   return surface === "home" ? `#content-${previewId}` : `#${surface}-${previewId}`;
+}
+
+/** La destinazione naviga: il dock porta a pagine vere, non a sezioni della stessa. */
+function isRouted(destination: ShellDestination): boolean {
+  return destination.kind !== "anteprima";
 }
 
 function BrandLockup({ name }: { name: string }) {
@@ -63,7 +73,7 @@ function Topbar({ name, published }: { name: string; published: boolean }) {
 }
 
 function SurfaceLink({
-  published,
+  routed,
   href,
   className,
   disabled,
@@ -71,7 +81,8 @@ function SurfaceLink({
   contractCenter = false,
   children,
 }: {
-  readonly published: boolean;
+  /** Vero quando l'href è una rotta dell'app: si naviga con `Link`, senza ricaricare. */
+  readonly routed: boolean;
   readonly href: string;
   readonly className?: string;
   readonly disabled?: boolean;
@@ -83,7 +94,7 @@ function SurfaceLink({
   if (!interactive) {
     return <span className={className} data-dock-center={dockHook} aria-disabled="true">{children}</span>;
   }
-  if (published) {
+  if (routed) {
     return <Link className={className} data-dock-center={dockHook} href={href}>{children}</Link>;
   }
   return <a className={className} data-dock-center={dockHook} href={href} aria-disabled={disabled}>{children}</a>;
@@ -95,19 +106,22 @@ function HomeDock({
   destination,
   interactive = true,
 }: Pick<SiteTemplateHomeProps, "config" | "previewId" | "interactive"> & { destination: ShellDestination }) {
-  const published = destination.kind === "pubblicato";
+  // Quando il dock naviga, una superficie spenta non compare: `aria-disabled` su un `<a href>`
+  // non ferma la navigazione, e porterebbe a una pagina che non esiste. In anteprima a schermo
+  // unico invece resta, marcata: lo showroom mostra apposta le differenze fra i template.
+  const routed = isRouted(destination);
 
   return (
     <nav className={styles.dock} aria-label={`Superfici di ${config.identity.name ?? "artista"}`}>
       {DOCK_ORDER.map((surface) => {
         const enabled = isEnabled(config, surface);
-        if (published && !enabled) return null;
+        if (routed && !enabled) return null;
         const center = surface === "epk";
         const className = `${styles.dockLink} ${center ? styles.dockCenter : ""}`;
         return (
           <SurfaceLink
             key={surface}
-            published={published}
+            routed={routed}
             className={className}
             href={homeHref(destination, surface, previewId)}
             disabled={!enabled}
@@ -128,18 +142,18 @@ function HomeModule({
   title,
   copy,
   href,
-  published,
+  routed,
   interactive,
 }: {
   number: string;
   title: string;
   copy: string;
   href: string;
-  published: boolean;
+  routed: boolean;
   interactive: boolean;
 }) {
   return (
-    <SurfaceLink published={published} interactive={interactive} className={styles.module} href={href}>
+    <SurfaceLink routed={routed} interactive={interactive} className={styles.module} href={href}>
       <span>{number}</span>
       <b>{title}</b>
       <small>{copy}</small>
@@ -173,6 +187,7 @@ function UnicaHome({
 }: SiteTemplateHomeProps) {
   const name = config.identity.name ?? "SENZA NOME";
   const published = destination.kind === "pubblicato";
+  const routed = isRouted(destination);
   const Contenuto = embedded ? "div" : "main";
   const listenEnabled = isEnabled(config, "listen");
   const feedEnabled = isEnabled(config, "feed");
@@ -218,12 +233,12 @@ function UnicaHome({
             )}
             <div className={styles.heroActions}>
               {listenEnabled && (
-                <SurfaceLink published={published} interactive={interactive} className={styles.primaryCta} href={homeHref(destination, "listen", previewId)}>
+                <SurfaceLink routed={routed} interactive={interactive} className={styles.primaryCta} href={homeHref(destination, "listen", previewId)}>
                   ASCOLTA ORA
                 </SurfaceLink>
               )}
               {feedEnabled && (
-                <SurfaceLink published={published} interactive={interactive} className={styles.ghostCta} href={homeHref(destination, "feed", previewId)}>
+                <SurfaceLink routed={routed} interactive={interactive} className={styles.ghostCta} href={homeHref(destination, "feed", previewId)}>
                   APRI IL FEED
                 </SurfaceLink>
               )}
@@ -235,13 +250,13 @@ function UnicaHome({
 
         <section className={styles.moduleStrip} aria-label="Porte del sito">
           {listenEnabled && (
-            <HomeModule published={published} interactive={interactive} number="01" title={sectionLabel(config, "listen")} copy="musica e release" href={homeHref(destination, "listen", previewId)} />
+            <HomeModule routed={routed} interactive={interactive} number="01" title={sectionLabel(config, "listen")} copy="musica e release" href={homeHref(destination, "listen", previewId)} />
           )}
           {feedEnabled && (
-            <HomeModule published={published} interactive={interactive} number="02" title={sectionLabel(config, "feed")} copy="visual e frammenti" href={homeHref(destination, "feed", previewId)} />
+            <HomeModule routed={routed} interactive={interactive} number="02" title={sectionLabel(config, "feed")} copy="visual e frammenti" href={homeHref(destination, "feed", previewId)} />
           )}
           {epkEnabled && (
-            <HomeModule published={published} interactive={interactive} number="03" title={sectionLabel(config, "epk")} copy="bio, press e contatti" href={homeHref(destination, "epk", previewId)} />
+            <HomeModule routed={routed} interactive={interactive} number="03" title={sectionLabel(config, "epk")} copy="bio, press e contatti" href={homeHref(destination, "epk", previewId)} />
           )}
         </section>
 

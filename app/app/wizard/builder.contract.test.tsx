@@ -61,41 +61,64 @@ describe("la pagina del builder serve a inserire, non a guardare", () => {
   });
 });
 
-describe("la pagina intera è quella che mostra il sito davvero", () => {
-  it("tiene HOME, contenuti ed EPK dentro lo stesso template", () => {
+describe("la pagina intera è il sito, non un suo riassunto", () => {
+  // Prima l'anteprima impilava HOME, un inventario testuale della bozza e l'EPK in una
+  // pagina sola, con il dock che scorreva fra ancore. Il sito pubblicato invece ha
+  // superfici separate: chi guardava l'anteprima per decidere se pubblicare vedeva una
+  // struttura che non sarebbe mai esistita.
+  it("la HOME dell'anteprima è la HOME e basta", () => {
     const owner = source("app", "app", "wizard", "preview", "[siteId]", "page.tsx");
-    const open = owner.indexOf("<SiteTemplateHome");
-    const content = owner.indexOf("<DraftContentPreview");
-    const epk = owner.indexOf("<EpkSurface");
-    const close = owner.indexOf("</SiteTemplateHome>");
-
-    expect(open).toBeGreaterThanOrEqual(0);
-    expect(content).toBeGreaterThan(open);
-    expect(epk).toBeGreaterThan(content);
-    expect(close).toBeGreaterThan(epk);
+    expect(owner).toContain("<SiteTemplateHome");
+    expect(owner, "l'inventario testuale non impagina più il sito")
+      .not.toContain("<DraftContentPreview");
   });
 
-  it("mostra la hero della bozza, che prima di questa PR non compariva", () => {
-    // Misurato: su `main` questa pagina non nominava affatto `hero_asset_id`.
-    // Il visual principale c'era nel database e non si vedeva da nessuna parte
-    // prima della pubblicazione.
-    const owner = source("app", "app", "wizard", "preview", "[siteId]", "page.tsx");
-    expect(owner).toContain("hero_asset_id");
-    expect(owner).toContain("heroSrc={heroSrc}");
-    expect(owner).toContain("/api/wizard/preview-asset/");
+  it("ogni superficie è una pagina, resa dallo stesso template del sito", () => {
+    const surface = source("app", "app", "wizard", "preview", "[siteId]", "[surface]", "page.tsx");
+    expect(surface).toContain("<SiteTemplateSurface");
+    // Gli stessi componenti del sito pubblicato, non una seconda resa: FEED e MERCH
+    // arrivano da `components/surfaces/content`, LISTEN dal catalogo tracce.
+    expect(surface).toContain("components/surfaces/content");
+    expect(surface).toContain("<TrackCatalogue");
+    expect(surface).toContain("<EpkSurface");
   });
 
-  it("service_role firma soltanto dopo auth e lettura RLS dell'asset", () => {
-    const route = source(
-      "app", "api", "wizard", "preview-asset", "[assetId]", "route.ts",
-    );
+  it("una superficie spenta non è raggiungibile nemmeno in anteprima", () => {
+    // La stessa regola del sito pubblicato: nascosta dal dock **e** non servita.
+    const surface = source("app", "app", "wizard", "preview", "[siteId]", "[surface]", "page.tsx");
+    expect(surface).toMatch(/if \(!isSurfaceEnabled\([^)]*\)\) notFound\(\)/u);
+  });
+
+  it("i media della bozza passano dalle route owner autenticate", () => {
+    const draft = source("app", "app", "wizard", "preview", "[siteId]", "draft.ts");
+    expect(draft).toContain("/api/wizard/preview-asset/");
+    expect(draft).toContain("/api/wizard/preview-track/");
+    expect(draft).toContain("hero_asset_id");
+  });
+
+  // Le due route owner sono gemelle di proposito: stesso ordine, stesso confine. Il banco
+  // le percorre entrambe, perché la seconda è nata copiando la prima ed è esattamente così
+  // che una disciplina si perde — copiando la forma e non la sequenza.
+  it.each([
+    ["preview-asset", "[assetId]", '.from("site_assets")'] as const,
+    ["preview-track", "[trackId]", '.from("site_tracks")'] as const,
+  ])("%s: service_role firma solo dopo auth e lettura sotto RLS", (cartella, param, tabella) => {
+    const route = source("app", "api", "wizard", cartella, param, "route.ts");
     const auth = route.indexOf("scoped.auth.getUser()");
-    const rlsRead = route.indexOf('.from("site_assets")');
+    const rlsRead = route.indexOf(tabella);
     const privileged = route.indexOf("const privileged = createSupabaseServiceRoleClient()");
 
     expect(auth).toBeGreaterThanOrEqual(0);
     expect(rlsRead).toBeGreaterThan(auth);
     expect(privileged).toBeGreaterThan(rlsRead);
     expect(route).toContain('Cache-Control", "private, no-store"');
+  });
+
+  it("la route audio dell'anteprima serve solo upload, non embed", () => {
+    // Una traccia `embed` non ha byte da servire: il suo indirizzo è quello del provider,
+    // che passa dalla allow-list. Chiederla qui deve fallire come una che non esiste.
+    const route = source("app", "api", "wizard", "preview-track", "[trackId]", "route.ts");
+    expect(route).toContain('track.source !== "upload"');
+    expect(route).toContain("track.purged_at !== null");
   });
 });

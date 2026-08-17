@@ -1,73 +1,41 @@
-import { ribbonVisuals } from "@/lib/site-visuals";
-import { notFound, redirect } from "next/navigation";
-
-import { EpkSurface } from "@/components/epk/EpkSurface";
 import { SiteTemplateHome } from "@/components/site-templates/SiteTemplate";
-import { siteConfigDraftSchema } from "@/lib/contract";
-import { DraftContentPreview } from "@/lib/wizard/DraftContentPreview";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { previewHrefs } from "@/lib/preview/navigation";
 import { paletteForDraft } from "@/lib/wizard/palette";
-import { epkContentForPreview } from "@/lib/wizard/preview-content";
+import { ribbonVisuals } from "@/lib/site-visuals";
+
+import { draftAssetSrc, draftBase, loadDraft } from "./draft";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * La HOME dell'anteprima, che è la HOME del sito.
+ *
+ * Fino a ieri questa pagina impilava sotto la HOME un inventario testuale della bozza e
+ * l'EPK, e il dock puntava ad ancore: una pagina sola che scorreva, mentre il sito
+ * pubblicato ha superfici separate. Ora la destinazione è `anteprima-navigabile`, quindi il
+ * dock porta a `/app/wizard/preview/<id>/<superficie>` — pagine vere, come sul sito — e la
+ * topbar continua a dire che è un'anteprima, perché lo è.
+ */
 export default async function OwnerPreviewPage({ params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params;
-  const supabase = await createSupabaseServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect(`/login?next=${encodeURIComponent(`/app/wizard/preview/${siteId}`)}`);
+  const base = draftBase(siteId);
+  const draft = await loadDraft(siteId, base);
 
-  const { data: site } = await supabase.from("sites").select("id").eq("id", siteId).maybeSingle();
-  if (!site) notFound();
-
-  const [configResult, contacts, links, press, dates, metrics, assets, tracks, posts] = await Promise.all([
-    supabase.from("site_config").select("config,hero_asset_id").eq("site_id", siteId).maybeSingle(),
-    supabase.from("site_contacts").select("id,role,name,email,consent_confirmed_at,sort_order").eq("site_id", siteId).order("sort_order"),
-    supabase.from("site_links").select("id,provider,url,sort_order").eq("site_id", siteId).order("sort_order"),
-    supabase.from("site_press").select("id,publication,quote,published_on,url,sort_order").eq("site_id", siteId).order("sort_order"),
-    supabase.from("site_dates").select("id,starts_at,city,venue,ticket_url,sort_order").eq("site_id", siteId).order("sort_order"),
-    supabase.from("site_metrics").select("id,label,value,sort_order").eq("site_id", siteId).order("sort_order"),
-    supabase.from("site_assets").select("id,kind,mime_type,byte_size,sort_order").eq("site_id", siteId).is("purged_at", null).order("sort_order"),
-    supabase.from("site_tracks").select("id,title,source,duration_seconds,embed_provider,embed_url,sort_order").eq("site_id", siteId).is("purged_at", null).order("sort_order"),
-    supabase.from("site_posts").select("id,kind,visual_asset_id,track_id,cover_asset_id,caption,sort_order").eq("site_id", siteId).order("sort_order"),
-  ]);
-  const parsed = siteConfigDraftSchema.safeParse(configResult.data?.config);
-  if (!parsed.success) notFound();
-  const epk = epkContentForPreview(parsed.data, {
-    contacts: contacts.data ?? [], links: links.data ?? [], press: press.data ?? [], dates: dates.data ?? [], metrics: metrics.data ?? [],
-  });
-
-  const previewId = `owner-${siteId}`;
-  const heroSrc = configResult.data?.hero_asset_id
-    ? `/api/wizard/preview-asset/${configResult.data.hero_asset_id}`
-    : null;
-  // Stessa selezione del sito pubblicato, presa dallo stesso modulo: se qui comparisse un
-  // visual che la` non compare, l'anteprima mentirebbe proprio su cio` per cui esiste.
   const visuals = ribbonVisuals(
-    assets.data ?? [],
-    posts.data ?? [],
-    (asset) => `/api/wizard/preview-asset/${asset.id}`,
+    draft.assets,
+    draft.posts,
+    (asset) => draftAssetSrc(asset.id),
     (asset) => `Visual draft ${asset.id.slice(0, 8)}`,
   );
 
   return (
     <SiteTemplateHome
-      config={parsed.data}
-      palette={paletteForDraft(parsed.data)}
-      previewId={previewId}
-      heroSrc={heroSrc}
+      config={draft.config}
+      palette={paletteForDraft(draft.config)}
+      previewId={`owner-${siteId}`}
+      heroSrc={draft.heroAssetId === null ? null : draftAssetSrc(draft.heroAssetId)}
       visuals={visuals}
-    >
-      <DraftContentPreview
-        config={parsed.data}
-        previewId={previewId}
-        assets={assets.data ?? []}
-        tracks={tracks.data ?? []}
-        posts={posts.data ?? []}
-      />
-      <div style={{ maxWidth: 980, margin: "0 auto", padding: "32px 20px 120px" }}>
-        <EpkSurface content={epk} id={`epk-${previewId}`} label="EPK preview owner" />
-      </div>
-    </SiteTemplateHome>
+      destination={{ kind: "anteprima-navigabile", hrefs: previewHrefs(base) }}
+    />
   );
 }

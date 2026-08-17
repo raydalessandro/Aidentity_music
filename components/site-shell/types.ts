@@ -41,4 +41,19 @@ export type ShellSurfaceId = "feed" | "listen" | "epk" | "merch" | "home";
  */
 export type ShellDestination =
   | { readonly kind: "anteprima" }
+  /**
+   * L'anteprima che **è** il sito.
+   *
+   * Decisione di Ray: «potrebbe direttamente essere il sito stesso che useranno». Non un
+   * renderer parallelo da tenere allineato a mano, ma lo stesso percorso servito con
+   * un'autorizzazione diversa — sessione per l'owner, token per il link a scadenza. Porta
+   * gli href come `pubblicato`, quindi il dock naviga e le superfici sono pagine a sé; ma
+   * `published` resta falso, quindi la topbar continua a dire che è un'anteprima.
+   *
+   * Perché una terza forma e non un booleano in più: le due invarianti della #26 devono
+   * restare indistruttibili — non esiste un `pubblicato` senza href, e non esiste
+   * un'`anteprima` a schermo unico che ne porti. Questa è la terza combinazione legittima,
+   * e il tipo la nomina invece di lasciarla nascere da una coppia di flag.
+   */
+  | { readonly kind: "anteprima-navigabile"; readonly hrefs: Readonly<Record<ShellSurfaceId, string>> }
   | { readonly kind: "pubblicato"; readonly hrefs: Readonly<Record<ShellSurfaceId, string>> };
